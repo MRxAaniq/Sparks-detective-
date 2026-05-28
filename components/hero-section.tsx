@@ -1,11 +1,18 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import Image from "next/image"
 import Link from "next/link"
 import { Search, Heart, MessageSquare, Sparkles } from "lucide-react"
 
 export default function HeroSection() {
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
   return (
     <section className="relative min-h-screen overflow-hidden bg-background">
       {/* Background with overlay */}
@@ -28,7 +35,7 @@ export default function HeroSection() {
 
       {/* Floating particles */}
       <div className="absolute inset-0 z-10 pointer-events-none">
-        {[...Array(20)].map((_, i) => (
+        {isMounted && [...Array(20)].map((_, i) => (
           <motion.div
             key={i}
             className="absolute w-1 h-1 rounded-full bg-neon-pink/60"
@@ -99,6 +106,16 @@ export default function HeroSection() {
                 style={{ fontFamily: "var(--font-rajdhani)" }}
               >
                 Finding the hottest partner. Solving emotional mysteries. Creating controlled chaos.
+              </motion.p>
+
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.45 }}
+                className="text-sm sm:text-base text-neon-pink max-w-xl leading-relaxed"
+                style={{ fontFamily: "var(--font-rajdhani)" }}
+              >
+                We also serve as pastor at your wedding to make the moment feel even more special.
               </motion.p>
             </div>
 

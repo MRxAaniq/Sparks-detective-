@@ -1,48 +1,23 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { MessageSquareWarning, Send, Heart, Eye, EyeOff, Clock, Flame, Quote } from "lucide-react"
+import { MessageSquareWarning, Send, Heart, Eye, EyeOff, Clock, Flame, Quote, Gamepad2, Star } from "lucide-react"
 import Navbar from "@/components/navbar"
 import Footer from "@/components/footer"
+import { supabase } from "@/lib/supabase"
 
-const sampleConfessions = [
-  {
-    id: 1,
-    content: "I have been pretending to like my best friend's partner for 3 years. The truth is, I think they are completely wrong for each other.",
-    timeAgo: "2 hours ago",
-    hearts: 42,
-    mood: "conflicted",
-  },
-  {
-    id: 2,
-    content: "Every night at 3 AM, I sneak out to feed the stray cats in my neighborhood. My family thinks I have insomnia.",
-    timeAgo: "5 hours ago",
-    hearts: 128,
-    mood: "wholesome",
-  },
-  {
-    id: 3,
-    content: "I once solved a mystery that was supposed to remain unsolved. The truth was too dangerous to reveal, so I buried it forever.",
-    timeAgo: "8 hours ago",
-    hearts: 89,
-    mood: "mysterious",
-  },
-  {
-    id: 4,
-    content: "I have been learning to play guitar for 6 months in secret. Planning to surprise my partner on our anniversary with their favorite song.",
-    timeAgo: "12 hours ago",
-    hearts: 256,
-    mood: "romantic",
-  },
-  {
-    id: 5,
-    content: "Sometimes I sit in my car for an extra 30 minutes before going home, just to have some quiet time to myself. No one knows.",
-    timeAgo: "1 day ago",
-    hearts: 312,
-    mood: "relatable",
-  },
-]
+interface Confession {
+  id: string
+  content: string
+  mood: string
+  is_anonymous: boolean
+  alias?: string
+  mnf_ign?: string
+  hearts: number
+  is_pinned: boolean
+  created_at: string
+}
 
 const moodTags = [
   { id: "all", label: "All" },
@@ -54,14 +29,39 @@ const moodTags = [
 ]
 
 export default function ConfessionsPage() {
-  const [confessions, setConfessions] = useState(sampleConfessions)
+  const [confessions, setConfessions] = useState<Confession[]>([])
+  const [loading, setLoading] = useState(true)
   const [newConfession, setNewConfession] = useState("")
   const [selectedMood, setSelectedMood] = useState("all")
   const [isAnonymous, setIsAnonymous] = useState(true)
   const [alias, setAlias] = useState("")
+  const [mnfIgn, setMnfIgn] = useState("")
   const [confessionMood, setConfessionMood] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [submitError, setSubmitError] = useState("")
+
+  useEffect(() => {
+    fetchConfessions()
+  }, [])
+
+  const fetchConfessions = async () => {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('confessions')
+        .select('*')
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setConfessions(data || [])
+    } catch (err) {
+      console.error("Error fetching confessions:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredConfessions = selectedMood === "all" 
     ? confessions 
@@ -72,28 +72,74 @@ export default function ConfessionsPage() {
     if (!newConfession.trim()) return
 
     setIsSubmitting(true)
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    setSubmitError("")
+    
+    try {
+      const { data, error } = await supabase
+        .from('confessions')
+        .insert([{
+          content: newConfession,
+          mood: confessionMood || "mysterious",
+          is_anonymous: isAnonymous,
+          alias: isAnonymous ? null : alias,
+          mnf_ign: mnfIgn,
+          is_pinned: false
+        }])
+        .select()
 
-    const newEntry = {
-      id: Date.now(),
-      content: newConfession,
-      timeAgo: "Just now",
-      hearts: 0,
-      mood: confessionMood || "mysterious",
+      if (error) throw error
+
+      if (data) {
+        setConfessions([data[0], ...confessions])
+      }
+      
+      setNewConfession("")
+      setConfessionMood("")
+      setAlias("")
+      setMnfIgn("")
+      setShowSuccess(true)
+      setTimeout(() => setShowSuccess(false), 3000)
+    } catch (err: any) {
+      console.error("Error posting confession:", err)
+      setSubmitError(err.message || "Failed to post confession.")
+    } finally {
+      setIsSubmitting(false)
     }
-
-    setConfessions([newEntry, ...confessions])
-    setNewConfession("")
-    setConfessionMood("")
-    setIsSubmitting(false)
-    setShowSuccess(true)
-    setTimeout(() => setShowSuccess(false), 3000)
   }
 
-  const handleHeart = (id: number) => {
+  const handleHeart = async (id: string) => {
+    // Optimistic update
     setConfessions(confessions.map(c => 
       c.id === id ? { ...c, hearts: c.hearts + 1 } : c
     ))
+
+    try {
+      const { error } = await supabase.rpc('increment_hearts', { confession_id: id })
+      if (error) {
+        // Fallback: manual increment if RPC fails
+        const currentConfession = confessions.find(c => c.id === id)
+        await supabase
+          .from('confessions')
+          .update({ hearts: (currentConfession?.hearts || 0) + 1 })
+          .eq('id', id)
+      }
+    } catch (err) {
+      console.error("Error incrementing hearts:", err)
+    }
+  }
+
+  const getTimeAgo = (dateString: string) => {
+    const now = new Date()
+    const past = new Date(dateString)
+    const diffInMs = now.getTime() - past.getTime()
+    const diffInMins = Math.floor(diffInMs / (1000 * 60))
+    const diffInHours = Math.floor(diffInMins / 60)
+    const diffInDays = Math.floor(diffInHours / 24)
+
+    if (diffInDays > 0) return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`
+    if (diffInHours > 0) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`
+    if (diffInMins > 0) return `${diffInMins} minute${diffInMins > 1 ? 's' : ''} ago`
+    return "Just now"
   }
 
   return (
@@ -250,6 +296,27 @@ export default function ConfessionsPage() {
                     />
                   )}
 
+                  {/* MNF Club IGN */}
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      <Gamepad2 className="w-4 h-4 inline mr-2 text-purple-400" />
+                      MNF Club In-Game Name (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={mnfIgn}
+                      onChange={(e) => setMnfIgn(e.target.value)}
+                      className="w-full px-4 py-3 glass rounded-lg border border-border focus:border-purple-500 focus:outline-none transition-all bg-transparent text-foreground placeholder:text-muted-foreground text-sm"
+                      placeholder="Enter your mnf club in-game name"
+                    />
+                  </div>
+
+                  {submitError && (
+                    <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-center">
+                      <p className="text-sm text-red-400">{submitError}</p>
+                    </div>
+                  )}
+
                   <button
                     type="submit"
                     disabled={isSubmitting || !newConfession.trim()}
@@ -310,50 +377,85 @@ export default function ConfessionsPage() {
 
               {/* Confessions List */}
               <motion.div layout className="space-y-4">
-                <AnimatePresence>
-                  {filteredConfessions.map((confession, index) => (
-                    <motion.div
-                      key={confession.id}
-                      layout
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ delay: index * 0.05 }}
-                      className="glass-card rounded-xl p-6 hover:border-purple-500/30 transition-all duration-300"
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                          <MessageSquareWarning className="w-5 h-5 text-purple-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {confession.timeAgo}
-                            </span>
-                            <span className="px-2 py-0.5 rounded-full text-xs bg-purple-500/20 text-purple-400 capitalize">
-                              {confession.mood}
-                            </span>
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-4">
+                    <div className="w-10 h-10 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                    <p className="text-muted-foreground animate-pulse">Decrypting confessions...</p>
+                  </div>
+                ) : (
+                  <AnimatePresence>
+                    {filteredConfessions.map((confession, index) => (
+                      <motion.div
+                        key={confession.id}
+                        layout
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ delay: index * 0.05 }}
+                        className={`glass-card rounded-xl p-6 transition-all duration-300 ${
+                          confession.is_pinned 
+                            ? "border-yellow-500/50 bg-yellow-500/5 shadow-[0_0_20px_rgba(234,179,8,0.2)]" 
+                            : "hover:border-purple-500/30"
+                        }`}
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            confession.is_pinned ? "bg-yellow-500/20" : "bg-purple-500/20"
+                          }`}>
+                            {confession.is_pinned ? (
+                              <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                            ) : (
+                              <MessageSquareWarning className="w-5 h-5 text-purple-400" />
+                            )}
                           </div>
-                          <p className="text-foreground leading-relaxed">{confession.content}</p>
-                          <div className="flex items-center gap-4 mt-4">
-                            <button
-                              onClick={() => handleHeart(confession.id)}
-                              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-neon-pink transition-colors group"
-                            >
-                              <Heart className="w-4 h-4 group-hover:fill-neon-pink transition-all" />
-                              <span>{confession.hearts}</span>
-                            </button>
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Flame className="w-3 h-3" />
-                              Anonymous
-                            </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {getTimeAgo(confession.created_at)}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-full text-xs capitalize ${
+                                  confession.is_pinned 
+                                    ? "bg-yellow-500/20 text-yellow-400" 
+                                    : "bg-purple-500/20 text-purple-400"
+                                }`}>
+                                  {confession.mood}
+                                </span>
+                                {confession.is_pinned && (
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500 text-black uppercase tracking-wider">
+                                    Confession of the Month
+                                  </span>
+                                )}
+                              </div>
+                              {confession.mnf_ign && (
+                                <span className="text-[10px] text-purple-400/50 font-mono">
+                                  IGN: {confession.mnf_ign}
+                                </span>
+                              )}
+                            </div>
+                            <p className={`leading-relaxed ${confession.is_pinned ? "text-foreground text-lg font-medium" : "text-foreground"}`}>
+                              {confession.content}
+                            </p>
+                            <div className="flex items-center gap-4 mt-4">
+                              <button
+                                onClick={() => handleHeart(confession.id)}
+                                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-neon-pink transition-colors group"
+                              >
+                                <Heart className={`w-4 h-4 group-hover:fill-neon-pink transition-all ${confession.hearts > 0 ? "fill-neon-pink text-neon-pink" : ""}`} />
+                                <span>{confession.hearts}</span>
+                              </button>
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Flame className="w-3 h-3" />
+                                {confession.is_anonymous ? "Anonymous" : confession.alias || "Secret Agent"}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                )}
               </motion.div>
 
               {filteredConfessions.length === 0 && (

@@ -2,27 +2,28 @@
 
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { Mail, Phone, MapPin, Clock, Send, User, MessageSquare, Building, CheckCircle, Twitter, Instagram, MessageCircle } from "lucide-react"
+import { Mail, Phone, MapPin, Clock, Send, User, MessageSquare, Building, CheckCircle, Twitter, Instagram, MessageCircle, Gamepad2 } from "lucide-react"
 import Navbar from "@/components/navbar"
 import Footer from "@/components/footer"
+import { supabase } from "@/lib/supabase"
 
 const contactMethods = [
   {
     icon: Mail,
-    title: "Email Us",
-    value: "sparks@mnfdetective.com",
+    title: "Support",
+    value: "Sparks Team",
     description: "For general inquiries and case submissions",
   },
   {
     icon: Phone,
     title: "Hotline",
-    value: "+1 (555) SPARKS",
+    value: "In-Game Direct",
     description: "Available 24/7 for urgent matters",
   },
   {
     icon: MapPin,
     title: "Headquarters",
-    value: "Neo Tokyo, Sector 7",
+    value: "Red Heat, Bar Vodka",
     description: "Visit by appointment only",
   },
   {
@@ -45,8 +46,7 @@ const inquiryTypes = [
 export default function ContactPage() {
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
-    company: "",
+    mnf_ign: "",
     inquiryType: "",
     subject: "",
     message: "",
@@ -54,13 +54,35 @@ export default function ContactPage() {
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setIsSubmitting(false)
-    setIsSubmitted(true)
+    setSubmitError("")
+
+    try {
+      const { error } = await supabase
+        .from('contact_messages')
+        .insert([{
+          name: formData.name,
+          mnf_ign: formData.mnf_ign,
+          inquiry_type: formData.inquiryType,
+          subject: formData.subject,
+          message: formData.message,
+          is_urgent: formData.urgent,
+          status: 'pending'
+        }])
+
+      if (error) throw error
+
+      setIsSubmitted(true)
+    } catch (err: any) {
+      console.error("Contact submission error:", err)
+      setSubmitError(err.message || "Failed to send message. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (isSubmitted) {
@@ -195,7 +217,7 @@ export default function ContactPage() {
               </div>
 
               {/* Social Links */}
-              <div className="glass-card rounded-xl p-6">
+             {/* <div className="glass-card rounded-xl p-6">
                 <h3 className="text-lg font-bold text-foreground mb-4" style={{ fontFamily: "var(--font-orbitron)" }}>
                   Connect With Us
                 </h3>
@@ -218,7 +240,7 @@ export default function ContactPage() {
                   })}
                 </div>
               </div>
-
+*/}
               {/* FAQ Teaser */}
               <div className="glass-card rounded-xl p-6">
                 <h3 className="text-lg font-bold text-foreground mb-4" style={{ fontFamily: "var(--font-orbitron)" }}>
@@ -262,7 +284,7 @@ export default function ContactPage() {
               </div>
 
               <div className="space-y-6">
-                {/* Name & Email */}
+                {/* Name & MNF IGN */}
                 <div className="grid sm:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
@@ -280,35 +302,22 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      <Mail className="w-4 h-4 inline mr-2" />
-                      Email Address
+                      <Gamepad2 className="w-4 h-4 inline mr-2 text-neon-blue" />
+                      MNF Club In-Game Name
                     </label>
                     <input
-                      type="email"
+                      type="text"
                       required
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      value={formData.mnf_ign}
+                      onChange={(e) => setFormData({ ...formData, mnf_ign: e.target.value })}
                       className="w-full px-4 py-3 glass rounded-lg border border-border focus:neon-border-blue focus:outline-none transition-all bg-transparent text-foreground placeholder:text-muted-foreground"
-                      placeholder="john@example.com"
+                      placeholder="Enter your mnf club in-game name"
                     />
                   </div>
                 </div>
 
-                {/* Company & Inquiry Type */}
+                {/* Inquiry Type & Subject */}
                 <div className="grid sm:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      <Building className="w-4 h-4 inline mr-2" />
-                      Company (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.company}
-                      onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                      className="w-full px-4 py-3 glass rounded-lg border border-border focus:neon-border-blue focus:outline-none transition-all bg-transparent text-foreground placeholder:text-muted-foreground"
-                      placeholder="Company name"
-                    />
-                  </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Inquiry Type
@@ -327,21 +336,19 @@ export default function ContactPage() {
                       ))}
                     </select>
                   </div>
-                </div>
-
-                {/* Subject */}
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Subject
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.subject}
-                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    className="w-full px-4 py-3 glass rounded-lg border border-border focus:neon-border-blue focus:outline-none transition-all bg-transparent text-foreground placeholder:text-muted-foreground"
-                    placeholder="Brief subject line"
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Subject
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.subject}
+                      onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                      className="w-full px-4 py-3 glass rounded-lg border border-border focus:neon-border-blue focus:outline-none transition-all bg-transparent text-foreground placeholder:text-muted-foreground"
+                      placeholder="Brief subject line"
+                    />
+                  </div>
                 </div>
 
                 {/* Message */}
@@ -379,6 +386,11 @@ export default function ContactPage() {
                 </div>
 
                 {/* Submit */}
+                {submitError && (
+                  <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-center">
+                    <p className="text-sm text-red-400">{submitError}</p>
+                  </div>
+                )}
                 <button
                   type="submit"
                   disabled={isSubmitting}

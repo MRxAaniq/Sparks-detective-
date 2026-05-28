@@ -1,83 +1,227 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Shield, Lock, Eye, EyeOff, Users, FileText, Heart, MessageSquare, 
   Package, Mail, TrendingUp, Clock, CheckCircle, AlertTriangle,
-  Search, Filter, MoreHorizontal, Trash2, Edit, ArrowUpRight
+  Search, Filter, MoreHorizontal, Trash2, Edit, ArrowUpRight, Star,
+  Gamepad2
 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
-// This is a hidden admin panel accessible only via direct route
-// The route is: /sparks-admin-panel-7x9k
-// This route is not linked anywhere in the navigation
+// Hidden admin panel route: /sparks-admin-panel-7x9k
 
-const ADMIN_PASSWORD = "sparks2024admin" // In production, use proper auth
-
-interface Submission {
+interface BaseSubmission {
   id: string
-  type: "case" | "match" | "confession" | "contact"
-  name: string
-  email: string
-  subject: string
-  status: "pending" | "reviewed" | "resolved"
-  date: string
-  priority?: "standard" | "priority" | "urgent"
+  created_at: string
+  name?: string
+  mnf_ign?: string
+  status?: string
 }
 
-const mockSubmissions: Submission[] = [
-  { id: "MNF-2847", type: "case", name: "Agent X", email: "agentx@mail.com", subject: "Background Investigation", status: "pending", date: "2024-01-15", priority: "urgent" },
-  { id: "MNF-2846", type: "match", name: "Sarah K.", email: "sarah@mail.com", subject: "Matchmaking Request", status: "reviewed", date: "2024-01-14", priority: "standard" },
-  { id: "MNF-2845", type: "case", name: "John D.", email: "john@mail.com", subject: "Relationship Analysis", status: "resolved", date: "2024-01-13", priority: "priority" },
-  { id: "CNF-1234", type: "confession", name: "Anonymous", email: "-", subject: "Confession Post", status: "pending", date: "2024-01-15" },
-  { id: "MSG-5678", type: "contact", name: "Emily R.", email: "emily@company.com", subject: "Collaboration Request", status: "pending", date: "2024-01-15" },
-  { id: "MNF-2844", type: "case", name: "Mike T.", email: "mike@mail.com", subject: "Mystery Solving", status: "reviewed", date: "2024-01-12", priority: "standard" },
-  { id: "MNF-2843", type: "match", name: "Lisa P.", email: "lisa@mail.com", subject: "Long-term Match", status: "resolved", date: "2024-01-11", priority: "priority" },
-]
+interface CaseSubmission extends BaseSubmission {
+  case_type: string
+  priority: string
+  subject: string
+  description: string
+  is_confidential: boolean
+}
 
-const stats = [
-  { label: "Total Cases", value: "127", change: "+12%", icon: FileText, color: "pink" },
-  { label: "Active Matches", value: "89", change: "+8%", icon: Heart, color: "blue" },
-  { label: "Confessions", value: "342", change: "+24%", icon: MessageSquare, color: "purple" },
-  { label: "Pending", value: "23", change: "-5%", icon: Clock, color: "yellow" },
-]
+interface MatchSubmission extends BaseSubmission {
+  age: number
+  gender: string
+  seeking_gender: string
+  traits: string[]
+  looking_for: string
+  about_you: string
+}
+
+interface RentalSubmission extends BaseSubmission {
+  prop_ids: number[]
+  duration: string
+  additional_notes?: string
+}
+
+interface ContactSubmission extends BaseSubmission {
+  inquiry_type: string
+  subject: string
+  message: string
+  is_urgent: boolean
+}
+
+interface ConfessionSubmission extends BaseSubmission {
+  content: string
+  mood: string
+  is_anonymous: boolean
+  alias?: string
+  hearts: number
+  is_pinned: boolean
+}
 
 export default function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [loginLoading, setLoginLoading] = useState(false)
   const [error, setError] = useState("")
-  const [submissions, setSubmissions] = useState(mockSubmissions)
-  const [filter, setFilter] = useState("all")
+  
+  const [activeTab, setActiveTab] = useState<"cases" | "matches" | "rentals" | "confessions" | "contact">("cases")
+  const [cases, setCases] = useState<CaseSubmission[]>([])
+  const [matches, setMatches] = useState<MatchSubmission[]>([])
+  const [rentals, setRentals] = useState<RentalSubmission[]>([])
+  const [confessions, setConfessions] = useState<ConfessionSubmission[]>([])
+  const [contacts, setContacts] = useState<ContactSubmission[]>([])
+  
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [dataError, setDataError] = useState("")
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (password === ADMIN_PASSWORD) {
-      setIsAuthenticated(true)
-      setError("")
-    } else {
-      setError("Invalid credentials. Access denied.")
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return
+    }
+
+    fetchAllData()
+    const refreshInterval = window.setInterval(() => {
+      fetchAllData()
+    }, 15000)
+
+    return () => window.clearInterval(refreshInterval)
+  }, [isAuthenticated])
+
+  const fetchAllData = async () => {
+    setLoading(true)
+    setDataError("")
+    try {
+      const [cRes, mRes, rRes, cfRes, ctRes] = await Promise.all([
+        supabase.from('cases').select('*').order('created_at', { ascending: false }),
+        supabase.from('matchmaking').select('*').order('created_at', { ascending: false }),
+        supabase.from('prop_rentals').select('*').order('created_at', { ascending: false }),
+        supabase.from('confessions').select('*').order('created_at', { ascending: false }),
+        supabase.from('contact_messages').select('*').order('created_at', { ascending: false })
+      ])
+
+      const errors = [cRes.error, mRes.error, rRes.error, cfRes.error, ctRes.error].filter(
+        (error): error is NonNullable<typeof error> => Boolean(error)
+      )
+      if (errors.length > 0) {
+        const message = errors.map((err) => err.message).join(" | ")
+        throw new Error(message)
+      }
+
+      setCases(cRes.data || [])
+      setMatches(mRes.data || [])
+      setRentals(rRes.data || [])
+      setConfessions(cfRes.data || [])
+      setContacts(ctRes.data || [])
+    } catch (err) {
+      console.error("Error fetching admin data:", err)
+      setDataError(err instanceof Error ? err.message : "Failed to load admin data.")
+    } finally {
+      setLoading(false)
     }
   }
 
-  const updateStatus = (id: string, newStatus: "pending" | "reviewed" | "resolved") => {
-    setSubmissions(submissions.map(s => 
-      s.id === id ? { ...s, status: newStatus } : s
-    ))
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoginLoading(true)
+    setError("")
+    
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'admin_password')
+        .single()
+
+      if (error) throw error
+
+      if (password === data.value) {
+        setIsAuthenticated(true)
+      } else {
+        setError("Invalid credentials. Access denied.")
+      }
+    } catch (err) {
+      console.error("Login error:", err)
+      setError("System authentication failure.")
+    } finally {
+      setLoginLoading(false)
+    }
   }
 
-  const deleteSubmission = (id: string) => {
-    setSubmissions(submissions.filter(s => s.id !== id))
+  const updateStatus = async (table: string, id: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from(table)
+        .update({ status: newStatus })
+        .eq('id', id)
+
+      if (error) throw error
+      fetchAllData() // Refresh
+    } catch (err) {
+      console.error(`Error updating status in ${table}:`, err)
+    }
   }
 
-  const filteredSubmissions = submissions.filter(s => {
-    const matchesFilter = filter === "all" || s.type === filter || s.status === filter
-    const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         s.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         s.id.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesFilter && matchesSearch
-  })
+  const togglePin = async (id: string, currentlyPinned: boolean) => {
+    try {
+      if (!currentlyPinned) {
+        // Unpin all first
+        await supabase.from('confessions').update({ is_pinned: false }).neq('id', 'placeholder')
+      }
+      
+      const { error } = await supabase
+        .from('confessions')
+        .update({ is_pinned: !currentlyPinned })
+        .eq('id', id)
+
+      if (error) throw error
+      fetchAllData()
+    } catch (err) {
+      console.error("Error toggling pin:", err)
+    }
+  }
+
+  const deleteRecord = async (table: string, id: string) => {
+    if (!confirm("Are you sure you want to delete this record?")) return
+    try {
+      const { error } = await supabase.from(table).delete().eq('id', id)
+      if (error) throw error
+      fetchAllData()
+    } catch (err) {
+      console.error(`Error deleting from ${table}:`, err)
+    }
+  }
+
+  const getFilteredData = () => {
+    let data: any[] = []
+    if (activeTab === "cases") data = cases
+    else if (activeTab === "matches") data = matches
+    else if (activeTab === "rentals") data = rentals
+    else if (activeTab === "confessions") data = confessions
+    else if (activeTab === "contact") data = contacts
+
+    return data.filter(item => {
+      const matchesSearch = 
+        (item.name?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.mnf_ign?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.content?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.subject?.toLowerCase().includes(searchQuery.toLowerCase()))
+      
+      const matchesStatus = statusFilter === "all" || item.status === statusFilter
+      return matchesSearch && matchesStatus
+    })
+  }
+
+  const stats = [
+    { label: "Total Cases", value: cases.length, icon: FileText, color: "pink" },
+    { label: "Matches", value: matches.length, icon: Heart, color: "blue" },
+    { label: "Confessions", value: confessions.length, icon: MessageSquare, color: "purple" },
+    { label: "Pending", value: [...cases, ...matches, ...rentals, ...contacts].filter(i => i.status === "pending").length, icon: Clock, color: "yellow" },
+  ]
 
   // Login Screen
   if (!isAuthenticated) {
@@ -169,17 +313,32 @@ export default function AdminPanel() {
                 <p className="text-xs text-muted-foreground">MNF Sparks Detective Team</p>
               </div>
             </div>
-            <button
-              onClick={() => setIsAuthenticated(false)}
-              className="px-4 py-2 glass rounded-lg text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Logout
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => fetchAllData()}
+                className="px-4 py-2 glass rounded-lg text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Refresh
+              </button>
+              <button
+                onClick={() => setIsAuthenticated(false)}
+                className="px-4 py-2 glass rounded-lg text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        {dataError && (
+          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+            <strong className="block mb-1">Admin data could not load.</strong>
+            <span>{dataError}</span>
+          </div>
+        )}
+
         {/* Stats Grid */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {stats.map((stat, i) => {
@@ -206,23 +365,44 @@ export default function AdminPanel() {
                     <Icon className={`w-6 h-6 ${colorClass}`} />
                   </div>
                 </div>
-                <div className="flex items-center gap-1 mt-3">
-                  <TrendingUp className={`w-4 h-4 ${stat.change.startsWith("+") ? "text-green-400" : "text-red-400"}`} />
-                  <span className={`text-sm ${stat.change.startsWith("+") ? "text-green-400" : "text-red-400"}`}>
-                    {stat.change}
-                  </span>
-                  <span className="text-xs text-muted-foreground">vs last month</span>
-                </div>
               </motion.div>
             )
           })}
         </div>
 
-        {/* Submissions Table */}
+        {/* Tab Selection */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          {[
+            { id: "cases", label: "Cases", icon: FileText },
+            { id: "matches", label: "Matches", icon: Heart },
+            { id: "rentals", label: "Prop Rentals", icon: Package },
+            { id: "contact", label: "Contact", icon: Mail },
+            { id: "confessions", label: "Confessions", icon: MessageSquare },
+          ].map((tab) => {
+            const Icon = tab.icon
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
+                  activeTab === tab.id
+                    ? "bg-neon-pink text-background shadow-[0_0_20px_rgba(236,72,153,0.3)]"
+                    : "glass text-muted-foreground hover:text-foreground"
+                }`}
+                style={{ fontFamily: "var(--font-orbitron)" }}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Submissions Content */}
         <div className="glass-card rounded-xl p-6">
           <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: "var(--font-orbitron)" }}>
-              Submissions
+            <h2 className="text-xl font-bold text-foreground uppercase tracking-widest" style={{ fontFamily: "var(--font-orbitron)" }}>
+              {activeTab} Management
             </h2>
             
             <div className="flex flex-wrap gap-3 w-full lg:w-auto">
@@ -234,132 +414,196 @@ export default function AdminPanel() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 glass rounded-lg border border-border focus:neon-border-pink focus:outline-none text-sm bg-transparent text-foreground placeholder:text-muted-foreground"
-                  placeholder="Search..."
+                  placeholder="Search records..."
                 />
               </div>
               
               {/* Filter */}
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="px-4 py-2 glass rounded-lg border border-border focus:neon-border-pink focus:outline-none text-sm bg-transparent text-foreground"
-              >
-                <option value="all" className="bg-background">All Types</option>
-                <option value="case" className="bg-background">Cases</option>
-                <option value="match" className="bg-background">Matches</option>
-                <option value="confession" className="bg-background">Confessions</option>
-                <option value="contact" className="bg-background">Contact</option>
-                <option value="pending" className="bg-background">Pending</option>
-                <option value="reviewed" className="bg-background">Reviewed</option>
-                <option value="resolved" className="bg-background">Resolved</option>
-              </select>
+              {activeTab !== "confessions" && (
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="px-4 py-2 glass rounded-lg border border-border focus:neon-border-pink focus:outline-none text-sm bg-transparent text-foreground"
+                >
+                  <option value="all" className="bg-background">All Status</option>
+                  <option value="pending" className="bg-background">Pending</option>
+                  <option value="reviewed" className="bg-background">Reviewed</option>
+                  <option value="resolved" className="bg-background">Resolved</option>
+                </select>
+              )}
             </div>
           </div>
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border/50">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">ID</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Type</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Name</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground hidden md:table-cell">Email</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground hidden lg:table-cell">Subject</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground hidden sm:table-cell">Date</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <AnimatePresence>
-                  {filteredSubmissions.map((submission) => (
-                    <motion.tr
-                      key={submission.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="border-b border-border/30 hover:bg-white/5 transition-colors"
-                    >
-                      <td className="py-3 px-4">
-                        <span className="font-mono text-sm text-neon-pink">{submission.id}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${
-                          submission.type === "case" ? "bg-neon-pink/20 text-neon-pink" :
-                          submission.type === "match" ? "bg-neon-blue/20 text-neon-blue" :
-                          submission.type === "confession" ? "bg-purple-500/20 text-purple-400" :
-                          "bg-green-500/20 text-green-400"
-                        }`}>
-                          {submission.type}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-foreground">{submission.name}</td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground hidden md:table-cell">{submission.email}</td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground hidden lg:table-cell truncate max-w-[200px]">{submission.subject}</td>
-                      <td className="py-3 px-4">
-                        <select
-                          value={submission.status}
-                          onChange={(e) => updateStatus(submission.id, e.target.value as typeof submission.status)}
-                          className={`px-2 py-1 rounded text-xs font-medium border-0 outline-none cursor-pointer ${
-                            submission.status === "pending" ? "bg-yellow-500/20 text-yellow-400" :
-                            submission.status === "reviewed" ? "bg-blue-500/20 text-blue-400" :
-                            "bg-green-500/20 text-green-400"
-                          }`}
-                        >
-                          <option value="pending" className="bg-background">Pending</option>
-                          <option value="reviewed" className="bg-background">Reviewed</option>
-                          <option value="resolved" className="bg-background">Resolved</option>
-                        </select>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground hidden sm:table-cell">{submission.date}</td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <button className="p-1.5 hover:bg-white/10 rounded transition-colors text-muted-foreground hover:text-foreground">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button className="p-1.5 hover:bg-white/10 rounded transition-colors text-muted-foreground hover:text-foreground">
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => deleteSubmission(submission.id)}
-                            className="p-1.5 hover:bg-red-500/20 rounded transition-colors text-muted-foreground hover:text-red-400"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </AnimatePresence>
-              </tbody>
-            </table>
+            {loading ? (
+              <div className="py-20 text-center">
+                <div className="w-12 h-12 border-4 border-neon-pink/30 border-t-neon-pink rounded-full animate-spin mx-auto mb-4" />
+                <p className="text-muted-foreground">Accessing secure database...</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border/50">
+                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Date</th>
+                    {activeTab !== "confessions" && (
+                      <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Client Info</th>
+                    )}
+                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      {activeTab === "cases" ? "Case Details" : 
+                       activeTab === "matches" ? "Profile" : 
+                       activeTab === "rentals" ? "Rental Details" : 
+                       activeTab === "contact" ? "Message Info" : "Confession"}
+                    </th>
+                    {activeTab !== "confessions" ? (
+                      <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Status</th>
+                    ) : (
+                      <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Pinned</th>
+                    )}
+                    <th className="text-right py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <AnimatePresence mode="popLayout">
+                    {getFilteredData().map((record) => (
+                      <motion.tr
+                        key={record.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="border-b border-border/30 hover:bg-white/5 transition-colors"
+                      >
+                        <td className="py-4 px-4 whitespace-nowrap">
+                          <div className="text-sm text-foreground">
+                            {new Date(record.created_at).toLocaleDateString()}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground font-mono">
+                            {new Date(record.created_at).toLocaleTimeString()}
+                          </div>
+                        </td>
+                        
+                        {activeTab !== "confessions" && (
+                          <td className="py-4 px-4">
+                            <div className="text-sm font-bold text-foreground">{record.name}</div>
+                            <div className="text-xs text-neon-pink font-mono mt-1">IGN: {record.mnf_ign}</div>
+                          </td>
+                        )}
+
+                        <td className="py-4 px-4">
+                          {activeTab === "cases" && (
+                            <div>
+                              <div className="text-sm font-bold text-foreground">{record.subject}</div>
+                              <div className="text-xs text-muted-foreground truncate max-w-50">{record.description}</div>
+                              <div className="flex gap-2 mt-1">
+                                <span className="px-1.5 py-0.5 bg-neon-pink/10 text-neon-pink text-[10px] rounded uppercase">{record.case_type}</span>
+                                <span className={`px-1.5 py-0.5 text-[10px] rounded uppercase ${record.priority === 'urgent' ? 'bg-red-500/20 text-red-400' : 'bg-neon-blue/20 text-neon-blue'}`}>{record.priority}</span>
+                              </div>
+                            </div>
+                          )}
+                          {activeTab === "matches" && (
+                            <div>
+                              <div className="text-sm font-bold text-foreground">{record.age}y • {record.gender} seeking {record.seeking_gender}</div>
+                              <div className="text-xs text-muted-foreground truncate max-w-50">{record.about_you}</div>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {record.traits?.slice(0, 3).map((t: string) => (
+                                  <span key={t} className="px-1.5 py-0.5 bg-neon-blue/10 text-neon-blue text-[10px] rounded">{t}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {activeTab === "rentals" && (
+                            <div>
+                              <div className="text-sm font-bold text-foreground">{record.duration} Duration</div>
+                              <div className="text-xs text-muted-foreground truncate max-w-50">Notes: {record.additional_notes || "None"}</div>
+                              <div className="text-xs text-muted-foreground mt-1">Props: {record.prop_ids?.length || 0} items</div>
+                            </div>
+                          )}
+                          {activeTab === "contact" && (
+                            <div>
+                              <div className="text-sm font-bold text-foreground">{record.subject}</div>
+                              <div className="text-xs text-muted-foreground truncate max-w-50">{record.message}</div>
+                              <div className="flex gap-2 mt-1">
+                                <span className="px-1.5 py-0.5 bg-neon-blue/10 text-neon-blue text-[10px] rounded uppercase">{record.inquiry_type}</span>
+                                {record.is_urgent && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded uppercase font-bold">URGENT</span>}
+                              </div>
+                            </div>
+                          )}
+                          {activeTab === "confessions" && (
+                            <div className="max-w-75">
+                              <div className="text-sm text-foreground line-clamp-2">{record.content}</div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] text-purple-400 font-mono uppercase">{record.mood}</span>
+                                <span className="text-[10px] text-muted-foreground">• {record.hearts} Hearts</span>
+                                {record.mnf_ign && <span className="text-[10px] text-neon-pink font-mono">• IGN: {record.mnf_ign}</span>}
+                              </div>
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-4">
+                          {activeTab !== "confessions" ? (
+                            <select
+                              value={record.status}
+                              onChange={(e) => updateStatus(
+                                activeTab === 'cases' ? 'cases' : 
+                                activeTab === 'matches' ? 'matchmaking' : 
+                                activeTab === 'rentals' ? 'prop_rentals' : 'contact_messages', 
+                                record.id, e.target.value
+                              )}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold border-0 outline-none cursor-pointer transition-all ${
+                                record.status === "pending" ? "bg-yellow-500/20 text-yellow-400" :
+                                record.status === "reviewed" ? "bg-blue-500/20 text-blue-400" :
+                                "bg-green-500/20 text-green-400"
+                              }`}
+                            >
+                              <option value="pending" className="bg-background">PENDING</option>
+                              <option value="reviewed" className="bg-background">REVIEWED</option>
+                              <option value="resolved" className="bg-background">RESOLVED</option>
+                            </select>
+                          ) : (
+                            <button
+                              onClick={() => togglePin(record.id, record.is_pinned)}
+                              className={`p-2 rounded-lg transition-all ${
+                                record.is_pinned 
+                                  ? "bg-yellow-500 text-black shadow-[0_0_10px_rgba(234,179,8,0.5)]" 
+                                  : "glass text-muted-foreground hover:text-yellow-400"
+                              }`}
+                            >
+                              <Star className={`w-4 h-4 ${record.is_pinned ? "fill-current" : ""}`} />
+                            </button>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button 
+                              onClick={() => deleteRecord(
+                                activeTab === 'cases' ? 'cases' : 
+                                activeTab === 'matches' ? 'matchmaking' : 
+                                activeTab === 'rentals' ? 'prop_rentals' : 
+                                activeTab === 'contact' ? 'contact_messages' : 'confessions', 
+                                record.id
+                              )}
+                              className="p-2 hover:bg-red-500/20 rounded-lg transition-colors text-muted-foreground hover:text-red-400"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+            )}
           </div>
 
-          {filteredSubmissions.length === 0 && (
-            <div className="text-center py-12">
-              <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No submissions found.</p>
+          {!loading && getFilteredData().length === 0 && (
+            <div className="text-center py-20">
+              <Shield className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
+              <p className="text-muted-foreground">No encrypted records found matching your query.</p>
             </div>
           )}
-
-          {/* Pagination placeholder */}
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-border/50">
-            <p className="text-sm text-muted-foreground">
-              Showing {filteredSubmissions.length} of {submissions.length} submissions
-            </p>
-            <div className="flex gap-2">
-              <button className="px-3 py-1.5 glass rounded text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Previous
-              </button>
-              <button className="px-3 py-1.5 bg-neon-pink text-background rounded text-sm font-medium">
-                1
-              </button>
-              <button className="px-3 py-1.5 glass rounded text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Next
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </main>

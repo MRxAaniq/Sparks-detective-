@@ -1,14 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
-import { Package, ShoppingCart, Search, Filter, Star, Clock, Zap, Eye, Camera, Radio, Briefcase, Glasses } from "lucide-react"
+import { Package, ShoppingCart, Search, Filter, Star, Clock, Zap, Eye, Camera, Radio, Briefcase, Glasses, User, Mail, Gamepad2, X, Send, CheckCircle } from "lucide-react"
 import Navbar from "@/components/navbar"
 import Footer from "@/components/footer"
+import { supabase } from "@/lib/supabase"
 
 const categories = [
-  { id: "all", label: "All Props", icon: Package },
   { id: "gadgets", label: "Spy Gadgets", icon: Eye },
   { id: "surveillance", label: "Surveillance", icon: Camera },
   { id: "communication", label: "Communication", icon: Radio },
@@ -16,110 +16,50 @@ const categories = [
   { id: "accessories", label: "Accessories", icon: Glasses },
 ]
 
-const props = [
+const propsList = [
   {
     id: 1,
-    name: "Night Vision Monocular",
-    category: "gadgets",
-    price: 25,
-    period: "per day",
-    rating: 4.9,
-    reviews: 47,
-    image: "/images/nova-agent.jpg",
-    description: "Military-grade night vision for surveillance operations. Perfect for noir roleplay scenarios.",
+    name: "Farm House",
+    category: "kits",
+    rating: 4.8,
+    reviews: 12,
+    image: "/images/farm.webp",
+    description: "A secluded farm location perfect for undercover operations or quiet retreats.",
     availability: "Available",
     featured: true,
   },
   {
     id: 2,
-    name: "Encrypted Radio Set",
-    category: "communication",
-    price: 15,
-    period: "per day",
-    rating: 4.8,
-    reviews: 32,
-    image: "/images/cipher-agent.jpg",
-    description: "Pair of encrypted walkie-talkies for secure team communication during operations.",
+    name: "Private Jet",
+    category: "gadgets",
+    rating: 5.0,
+    reviews: 5,
+    image: "/images/jet.webp",
+    description: "High-speed transport for elite agents. Equipped with radar-jamming technology.",
     availability: "Available",
     featured: true,
   },
   {
     id: 3,
-    name: "Detective Starter Kit",
+    name: "The Gloryhole",
     category: "kits",
-    price: 40,
-    period: "per weekend",
-    rating: 5.0,
-    reviews: 89,
-    image: "/images/phoenix-agent.jpg",
-    description: "Complete kit with magnifying glass, evidence bags, notepad, and classic fedora.",
-    availability: "Limited",
+    rating: 4.2,
+    reviews: 24,
+    image: "/images/gh.webp",
+    description: "A mysterious underground location for high-stakes meetings and secret handoffs.",
+    availability: "Available",
     featured: true,
   },
   {
     id: 4,
-    name: "Hidden Camera Pen",
-    category: "surveillance",
-    price: 10,
-    period: "per day",
-    rating: 4.7,
-    reviews: 28,
-    image: "/images/sparky-hero.png",
-    description: "Discreet pen with built-in camera for undercover documentation.",
-    availability: "Available",
-    featured: false,
-  },
-  {
-    id: 5,
-    name: "Cyber Noir Glasses",
-    category: "accessories",
-    price: 12,
-    period: "per day",
-    rating: 4.6,
-    reviews: 54,
-    image: "/images/nova-agent.jpg",
-    description: "Stylish glasses with LED accents for the perfect cyber-noir aesthetic.",
-    availability: "Available",
-    featured: false,
-  },
-  {
-    id: 6,
-    name: "Voice Modulator",
-    category: "gadgets",
-    price: 20,
-    period: "per day",
-    rating: 4.8,
-    reviews: 36,
-    image: "/images/cipher-agent.jpg",
-    description: "Change your voice in real-time for anonymous calls and roleplay scenarios.",
-    availability: "Available",
-    featured: false,
-  },
-  {
-    id: 7,
-    name: "Femme Fatale Kit",
+    name: "2 Bedroom Cyber House",
     category: "kits",
-    price: 55,
-    period: "per weekend",
     rating: 4.9,
-    reviews: 67,
-    image: "/images/phoenix-agent.jpg",
-    description: "Elegant accessories, prop jewelry, and spy gadgets for the mysterious operative.",
+    reviews: 31,
+    image: "/images/2bh.webp",
+    description: "Fully furnished 2-bedroom safehouse with advanced security systems.",
     availability: "Available",
     featured: true,
-  },
-  {
-    id: 8,
-    name: "Tracking Device Prop",
-    category: "surveillance",
-    price: 8,
-    period: "per day",
-    rating: 4.5,
-    reviews: 19,
-    image: "/images/sparky-hero.png",
-    description: "Realistic-looking GPS tracker props for mystery scenarios (non-functional).",
-    availability: "Available",
-    featured: false,
   },
 ]
 
@@ -127,8 +67,18 @@ export default function PropsPage() {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [cart, setCart] = useState<number[]>([])
+  const [showCheckout, setShowCheckout] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSubmitted, setIsSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState("")
+  const [formData, setFormData] = useState({
+    name: "",
+    mnf_ign: "",
+    duration: "1 day",
+    additional_notes: "",
+  })
 
-  const filteredProps = props.filter((prop) => {
+  const filteredProps = propsList.filter((prop) => {
     const matchesCategory = selectedCategory === "all" || prop.category === selectedCategory
     const matchesSearch = prop.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          prop.description.toLowerCase().includes(searchQuery.toLowerCase())
@@ -143,6 +93,40 @@ export default function PropsPage() {
 
   const removeFromCart = (id: number) => {
     setCart(cart.filter(i => i !== id))
+  }
+
+  const handleCheckout = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setSubmitError("")
+
+    try {
+      const { error } = await supabase
+        .from('prop_rentals')
+        .insert([{
+          name: formData.name,
+          mnf_ign: formData.mnf_ign,
+          prop_ids: cart,
+          duration: formData.duration,
+          additional_notes: formData.additional_notes,
+          status: 'pending'
+        }])
+
+      if (error) throw error
+
+      setIsSubmitted(true)
+      setCart([])
+      setTimeout(() => {
+        setIsSubmitted(false)
+        setShowCheckout(false)
+        setFormData({ name: "", mnf_ign: "", duration: "1 day", additional_notes: "" })
+      }, 3000)
+    } catch (err: any) {
+      console.error("Rental error:", err)
+      setSubmitError(err.message || "Failed to submit rental request.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -177,6 +161,23 @@ export default function PropsPage() {
               Rent spy gadgets, roleplay kits, and accessories for your next investigation, event, or creative project.
             </p>
           </motion.div>
+        </div>
+      </section>
+
+      {/* Pricing Note */}
+      <section className="pb-6">
+        <div className="container mx-auto px-4">
+          <div className="glass-card rounded-2xl border border-neon-pink/30 px-5 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-[0.2em] text-neon-pink">Hourly pricing</p>
+              <p className="text-sm text-muted-foreground">
+                2 Bedroom Cyber House: $10k per hour. All other props: $15k per hour.
+              </p>
+            </div>
+            <div className="text-xs text-muted-foreground sm:text-right">
+              Prices are shown in USD and billed per hour.
+            </div>
+          </div>
         </div>
       </section>
 
@@ -219,7 +220,12 @@ export default function PropsPage() {
 
             {/* Cart indicator */}
             <div className="flex items-center gap-2">
-              <button className="relative flex items-center gap-2 px-4 py-2 glass neon-border-pink rounded-lg text-neon-pink">
+              <button 
+                onClick={() => cart.length > 0 && setShowCheckout(true)}
+                className={`relative flex items-center gap-2 px-4 py-2 glass rounded-lg transition-all ${
+                  cart.length > 0 ? "neon-border-pink text-neon-pink cursor-pointer" : "text-muted-foreground cursor-not-allowed"
+                }`}
+              >
                 <ShoppingCart className="w-5 h-5" />
                 <span className="font-medium">{cart.length}</span>
                 {cart.length > 0 && (
@@ -233,6 +239,156 @@ export default function PropsPage() {
         </div>
       </section>
 
+      {/* Checkout Modal */}
+      <AnimatePresence>
+        {showCheckout && (
+          <div className="fixed inset-0 z-100 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isSubmitting && setShowCheckout(false)}
+              className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg glass-card neon-border-pink rounded-2xl overflow-hidden shadow-2xl"
+            >
+              {isSubmitted ? (
+                <div className="p-12 text-center">
+                  <div className="w-20 h-20 mx-auto rounded-full bg-green-500/20 flex items-center justify-center mb-6">
+                    <CheckCircle className="w-10 h-10 text-green-400" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-foreground mb-4" style={{ fontFamily: "var(--font-orbitron)" }}>
+                    Rental Request Sent!
+                  </h2>
+                  <p className="text-muted-foreground">
+                    Our team will contact you soon in game using the MNF Club in-game name you provided. Please make sure it is correct.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-8">
+                  <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-neon-pink/20 flex items-center justify-center">
+                        <ShoppingCart className="w-5 h-5 text-neon-pink" />
+                      </div>
+                      <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: "var(--font-orbitron)" }}>
+                        Rental Checkout
+                      </h2>
+                    </div>
+                    <button 
+                      onClick={() => setShowCheckout(false)}
+                      className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                    >
+                      <X className="w-5 h-5 text-muted-foreground" />
+                    </button>
+                  </div>
+
+                  <div className="mb-6">
+                    <p className="text-sm font-medium text-foreground mb-3">Selected Props:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {cart.map(id => {
+                        const prop = propsList.find(p => p.id === id)
+                        return (
+                          <span key={id} className="px-3 py-1 bg-neon-pink/10 border border-neon-pink/30 rounded-full text-xs text-neon-pink">
+                            {prop?.name}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleCheckout} className="space-y-4">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">Name</label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <input
+                            type="text"
+                            required
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            className="w-full pl-10 pr-4 py-2 glass rounded-lg border border-border focus:neon-border-pink focus:outline-none text-sm bg-transparent text-foreground"
+                            placeholder="John Doe"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">MNF Club In-Game Name</label>
+                        <div className="relative">
+                          <Gamepad2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <input
+                            type="text"
+                            required
+                            value={formData.mnf_ign}
+                            onChange={(e) => setFormData({ ...formData, mnf_ign: e.target.value })}
+                            className="w-full pl-10 pr-4 py-2 glass rounded-lg border border-border focus:neon-border-pink focus:outline-none text-sm bg-transparent text-foreground"
+                            placeholder="Your MNF IGN"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">Rental Duration</label>
+                      <select
+                        value={formData.duration}
+                        onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                        className="w-full px-4 py-2 glass rounded-lg border border-border focus:neon-border-pink focus:outline-none text-sm bg-transparent text-foreground"
+                      >
+                        <option value="1 day" className="bg-background">1 Day</option>
+                        <option value="3 days" className="bg-background">3 Days</option>
+                        <option value="1 week" className="bg-background">1 Week</option>
+                        <option value="custom" className="bg-background">Custom (Contact Team)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">Additional Notes</label>
+                      <textarea
+                        rows={3}
+                        value={formData.additional_notes}
+                        onChange={(e) => setFormData({ ...formData, additional_notes: e.target.value })}
+                        className="w-full px-4 py-2 glass rounded-lg border border-border focus:neon-border-pink focus:outline-none text-sm bg-transparent text-foreground resize-none"
+                        placeholder="Any special requests or instructions..."
+                      />
+                    </div>
+
+                    {submitError && (
+                      <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-center">
+                        <p className="text-sm text-red-400">{submitError}</p>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-neon-pink text-background font-semibold rounded-lg transition-all duration-300 hover:scale-[1.02] disabled:opacity-50"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          Submit Rental Request
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Featured Props */}
       {selectedCategory === "all" && searchQuery === "" && (
         <section className="py-12">
@@ -242,7 +398,7 @@ export default function PropsPage() {
               Featured Props
             </h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {props.filter(p => p.featured).map((prop, index) => (
+              {propsList.filter(p => p.featured).map((prop, index) => (
                 <motion.div
                   key={prop.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -257,7 +413,7 @@ export default function PropsPage() {
                       fill
                       className="object-cover group-hover:scale-110 transition-transform duration-500"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-linear-to-t from-background via-transparent to-transparent" />
                     <span className="absolute top-3 left-3 px-2 py-1 bg-neon-pink text-background text-xs font-bold rounded">
                       FEATURED
                     </span>
@@ -269,13 +425,9 @@ export default function PropsPage() {
                       <span className="text-sm text-foreground">{prop.rating}</span>
                       <span className="text-xs text-muted-foreground">({prop.reviews})</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xl font-bold neon-text-pink">${prop.price}</span>
-                        <span className="text-xs text-muted-foreground ml-1">{prop.period}</span>
-                      </div>
+                    <div className="flex items-center justify-end">
                       <button
-                        onClick={() => addToCart(prop.id)}
+                        onClick={() => cart.includes(prop.id) ? removeFromCart(prop.id) : addToCart(prop.id)}
                         className={`p-2 rounded-lg transition-all ${
                           cart.includes(prop.id)
                             ? "bg-green-500 text-white"
@@ -321,7 +473,7 @@ export default function PropsPage() {
                       fill
                       className="object-cover group-hover:scale-110 transition-transform duration-500"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-linear-to-t from-background via-transparent to-transparent" />
                     <span className={`absolute top-3 right-3 px-2 py-1 text-xs font-medium rounded ${
                       prop.availability === "Available" 
                         ? "bg-green-500/20 text-green-400" 
@@ -341,11 +493,7 @@ export default function PropsPage() {
                       <span className="text-sm text-foreground">{prop.rating}</span>
                       <span className="text-xs text-muted-foreground">({prop.reviews} reviews)</span>
                     </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-border/50">
-                      <div>
-                        <span className="text-xl font-bold neon-text-pink">${prop.price}</span>
-                        <span className="text-xs text-muted-foreground ml-1">{prop.period}</span>
-                      </div>
+                    <div className="flex items-center justify-end pt-3 border-t border-border/50">
                       <button
                         onClick={() => cart.includes(prop.id) ? removeFromCart(prop.id) : addToCart(prop.id)}
                         className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${

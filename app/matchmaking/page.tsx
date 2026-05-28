@@ -2,9 +2,10 @@
 
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { Heart, Sparkles, Send, User, Mail, MessageSquare, Star, Flame, Users } from "lucide-react"
+import { Heart, Sparkles, Send, User, Mail, MessageSquare, Star, Flame, Users, Gamepad2 } from "lucide-react"
 import Navbar from "@/components/navbar"
 import Footer from "@/components/footer"
+import { supabase } from "@/lib/supabase"
 
 const compatibilityTraits = [
   "Adventurous",
@@ -31,18 +32,19 @@ const lookingFor = [
 export default function MatchmakingPage() {
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
+    mnf_ign: "",
     age: "",
     gender: "",
     seekingGender: "",
     traits: [] as string[],
-    lookingFor: "",
-    idealDate: "",
+    looking_for: "",
+    ideal_date: "",
     dealbreakers: "",
-    aboutYou: "",
+    about_you: "",
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState("")
 
   const handleTraitToggle = (trait: string) => {
     setFormData((prev) => ({
@@ -58,10 +60,34 @@ export default function MatchmakingPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-    // Simulate submission
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setIsSubmitting(false)
-    setIsSubmitted(true)
+    setSubmitError("")
+    
+    try {
+      const { error } = await supabase
+        .from('matchmaking')
+        .insert([{
+          name: formData.name,
+          mnf_ign: formData.mnf_ign,
+          age: parseInt(formData.age),
+          gender: formData.gender,
+          seeking_gender: formData.seekingGender,
+          traits: formData.traits,
+          looking_for: formData.looking_for,
+          ideal_date: formData.ideal_date,
+          dealbreakers: formData.dealbreakers,
+          about_you: formData.about_you,
+          status: 'pending'
+        }])
+
+      if (error) throw error
+      
+      setIsSubmitted(true)
+    } catch (err: any) {
+      console.error("Matchmaking error:", err)
+      setSubmitError(err.message || "Failed to submit request. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (isSubmitted) {
@@ -202,16 +228,16 @@ export default function MatchmakingPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    <Mail className="w-4 h-4 inline mr-2" />
-                    Email Address
+                    <Gamepad2 className="w-4 h-4 inline mr-2 text-neon-pink" />
+                    MNF Club In-Game Name
                   </label>
                   <input
-                    type="email"
+                    type="text"
                     required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    value={formData.mnf_ign}
+                    onChange={(e) => setFormData({ ...formData, mnf_ign: e.target.value })}
                     className="w-full px-4 py-3 glass rounded-lg border border-border focus:neon-border-pink focus:outline-none transition-all bg-transparent text-foreground placeholder:text-muted-foreground"
-                    placeholder="your@email.com"
+                    placeholder="Enter your mnf club in-game name"
                   />
                 </div>
               </div>
@@ -298,9 +324,9 @@ export default function MatchmakingPage() {
                     <button
                       key={option}
                       type="button"
-                      onClick={() => setFormData({ ...formData, lookingFor: option })}
+                      onClick={() => setFormData({ ...formData, looking_for: option })}
                       className={`px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 text-left ${
-                        formData.lookingFor === option
+                        formData.looking_for === option
                           ? "glass-card neon-border-pink text-neon-pink"
                           : "glass border border-border text-muted-foreground hover:text-foreground hover:border-neon-pink/50"
                       }`}
@@ -319,8 +345,8 @@ export default function MatchmakingPage() {
                 </label>
                 <textarea
                   rows={3}
-                  value={formData.idealDate}
-                  onChange={(e) => setFormData({ ...formData, idealDate: e.target.value })}
+                  value={formData.ideal_date}
+                  onChange={(e) => setFormData({ ...formData, ideal_date: e.target.value })}
                   className="w-full px-4 py-3 glass rounded-lg border border-border focus:neon-border-pink focus:outline-none transition-all bg-transparent text-foreground placeholder:text-muted-foreground resize-none"
                   placeholder="A midnight rooftop dinner with city lights below..."
                 />
@@ -346,14 +372,19 @@ export default function MatchmakingPage() {
                 <textarea
                   rows={4}
                   required
-                  value={formData.aboutYou}
-                  onChange={(e) => setFormData({ ...formData, aboutYou: e.target.value })}
+                  value={formData.about_you}
+                  onChange={(e) => setFormData({ ...formData, about_you: e.target.value })}
                   className="w-full px-4 py-3 glass rounded-lg border border-border focus:neon-border-pink focus:outline-none transition-all bg-transparent text-foreground placeholder:text-muted-foreground resize-none"
                   placeholder="Share your story, interests, what makes you unique..."
                 />
               </div>
 
               {/* Submit */}
+              {submitError && (
+                <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-center">
+                  <p className="text-sm text-red-400">{submitError}</p>
+                </div>
+              )}
               <button
                 type="submit"
                 disabled={isSubmitting}

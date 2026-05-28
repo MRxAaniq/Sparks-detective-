@@ -1,49 +1,86 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { motion, type Variants } from "framer-motion"
+import type { ReactNode } from "react"
 import Image from "next/image"
 import { Eye, Brain, Shield, Zap } from "lucide-react"
 
 const agents = [
   {
-    name: "Nova",
-    role: "Shadow Operative",
-    specialty: "Infiltration & Reconnaissance",
-    image: "/images/nova-agent.jpg",
+    name: "Dumb Detective",
+    role: "Co-Lead Investigator",
+    specialty: "Smartest Player in the Game",
+    image: "/images/dumb.jpg",
     stats: {
       stealth: 95,
       tech: 88,
       combat: 75,
     },
-    quote: "In the shadows, truth becomes visible.",
+    quote: "Only the Name is Dumb.",
   },
   {
-    name: "Cipher",
-    role: "Tech Specialist",
-    specialty: "Digital Forensics & Hacking",
-    image: "/images/cipher-agent.jpg",
+    name: "John_Wick",
+    role: "Encounter Specialist",
+    specialty: "Fucks Good",
+    image: "/images/John1.jpeg",
     stats: {
       stealth: 60,
       tech: 98,
       combat: 45,
     },
-    quote: "Every system has a backdoor. I find them.",
+    quote: "Every system has a backdoor (Asshole). I Fuck it.",
   },
   {
-    name: "Phoenix",
-    role: "Social Engineer",
-    specialty: "Manipulation & Extraction",
-    image: "/images/phoenix-agent.jpg",
+    name: "Mayalla",
+    role: "Dumb Slut Detective",
+    specialty: "Does as she's asked (Good Girl)",
+    image: "/images/maya.png",
     stats: {
       stealth: 85,
       tech: 70,
       combat: 80,
     },
-    quote: "People tell me their secrets willingly.",
+    quote: "People tell me their secrets willingly in bed.",
   },
+  {
+    name: "Corinne",
+    role: "God Tier Slut",
+    specialty: "Will Make you Forget bout ur lover",
+    image: "/images/corine.jpeg",
+    stats: {
+      stealth: 85,
+      tech: 70,
+      combat: 80,
+    },
+    quote: "SSS tier Slut.",
+  },
+   {
+    name: "Onee-Chan",
+    role: "Vanquisher",
+    specialty: "Cold asf Stare",
+    image: "/images/onee1.png",
+    stats: {
+      stealth: 85,
+      tech: 70,
+      combat: 80,
+    },
+    quote: "Only Talk About non-sexual Topics .",
+  },
+  {
+    name: "Markon",
+    role: "Black-Bottom",
+    specialty: "Kinda Gay 💅",
+    image: "/images/mark.jpg",
+    stats: {
+      stealth: 85,
+      tech: 70,
+      combat: 80,
+    },
+    quote: "Good Bottom T_T.",
+  }
 ]
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -53,14 +90,14 @@ const containerVariants = {
   },
 }
 
-const cardVariants = {
+const cardVariants: Variants = {
   hidden: { opacity: 0, y: 50 },
   visible: {
     opacity: 1,
     y: 0,
     transition: {
       duration: 0.6,
-      ease: "easeOut",
+      ease: "easeOut" as const,
     },
   },
 }
@@ -120,7 +157,7 @@ export default function TeamSection() {
                     src={agent.image}
                     alt={agent.name}
                     fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-110"
+                    className="transition-transform duration-500 group-hover:scale-110 object-contain object-top"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
                   
@@ -170,7 +207,7 @@ export default function TeamSection() {
   )
 }
 
-function StatBar({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
+function StatBar({ label, value, icon }: { label: string; value: number; icon: ReactNode }) {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
