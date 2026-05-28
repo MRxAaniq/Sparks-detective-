@@ -493,7 +493,7 @@ export default function AdminPanel() {
                           {activeTab === "cases" && (
                             <div>
                               <div className="text-sm font-bold text-foreground">{record.subject}</div>
-                              <div className="text-xs text-muted-foreground truncate max-w-50">{record.description}</div>
+                              <div className="text-xs text-muted-foreground whitespace-normal break-words max-w-none">{record.description}</div>
                               <div className="flex gap-2 mt-1">
                                 <span className="px-1.5 py-0.5 bg-neon-pink/10 text-neon-pink text-[10px] rounded uppercase">{record.case_type}</span>
                                 <span className={`px-1.5 py-0.5 text-[10px] rounded uppercase ${record.priority === 'urgent' ? 'bg-red-500/20 text-red-400' : 'bg-neon-blue/20 text-neon-blue'}`}>{record.priority}</span>
@@ -503,7 +503,7 @@ export default function AdminPanel() {
                           {activeTab === "matches" && (
                             <div>
                               <div className="text-sm font-bold text-foreground">{record.age}y • {record.gender} seeking {record.seeking_gender}</div>
-                              <div className="text-xs text-muted-foreground truncate max-w-50">{record.about_you}</div>
+                              <div className="text-xs text-muted-foreground whitespace-normal break-words max-w-none">{record.about_you}</div>
                               <div className="flex flex-wrap gap-1 mt-1">
                                 {record.traits?.slice(0, 3).map((t: string) => (
                                   <span key={t} className="px-1.5 py-0.5 bg-neon-blue/10 text-neon-blue text-[10px] rounded">{t}</span>
@@ -514,14 +514,14 @@ export default function AdminPanel() {
                           {activeTab === "rentals" && (
                             <div>
                               <div className="text-sm font-bold text-foreground">{record.duration} Duration</div>
-                              <div className="text-xs text-muted-foreground truncate max-w-50">Notes: {record.additional_notes || "None"}</div>
+                              <div className="text-xs text-muted-foreground whitespace-normal break-words max-w-none">Notes: {record.additional_notes || "None"}</div>
                               <div className="text-xs text-muted-foreground mt-1">Props: {record.prop_ids?.length || 0} items</div>
                             </div>
                           )}
                           {activeTab === "contact" && (
                             <div>
                               <div className="text-sm font-bold text-foreground">{record.subject}</div>
-                              <div className="text-xs text-muted-foreground truncate max-w-50">{record.message}</div>
+                              <div className="text-xs text-muted-foreground whitespace-normal break-words max-w-none">{record.message}</div>
                               <div className="flex gap-2 mt-1">
                                 <span className="px-1.5 py-0.5 bg-neon-blue/10 text-neon-blue text-[10px] rounded uppercase">{record.inquiry_type}</span>
                                 {record.is_urgent && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded uppercase font-bold">URGENT</span>}
@@ -529,8 +529,8 @@ export default function AdminPanel() {
                             </div>
                           )}
                           {activeTab === "confessions" && (
-                            <div className="max-w-75">
-                              <div className="text-sm text-foreground line-clamp-2">{record.content}</div>
+                            <div className="max-w-none">
+                              <div className="text-sm text-foreground whitespace-normal break-words">{record.content}</div>
                               <div className="flex items-center gap-2 mt-1">
                                 <span className="text-[10px] text-purple-400 font-mono uppercase">{record.mood}</span>
                                 <span className="text-[10px] text-muted-foreground">• {record.hearts} Hearts</span>
