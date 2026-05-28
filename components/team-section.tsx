@@ -34,7 +34,7 @@ const agents = [
     name: "Mayalla",
     role: "Dumb Slut Detective",
     specialty: "Does as she's asked (Good Girl)",
-    image: "/images/maya.png",
+    image: "/images/maya1.png",
     stats: {
       stealth: 85,
       tech: 70,
