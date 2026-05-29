@@ -3,12 +3,18 @@
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
-  Shield, Lock, Eye, EyeOff, Users, FileText, Heart, MessageSquare, 
-  Package, Mail, TrendingUp, Clock, CheckCircle, AlertTriangle,
-  Search, Filter, MoreHorizontal, Trash2, Edit, ArrowUpRight, Star,
-  Gamepad2
+  Shield, Lock, Eye, EyeOff, FileText, Heart, MessageSquare,
+  Package, Mail, Clock, Search, Trash2, Star
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 // Hidden admin panel route: /sparks-admin-panel-7x9k
 
@@ -25,6 +31,8 @@ interface CaseSubmission extends BaseSubmission {
   priority: string
   subject: string
   description: string
+  evidence?: string
+  admin_finding?: string
   is_confidential: boolean
 }
 
@@ -59,6 +67,13 @@ interface ConfessionSubmission extends BaseSubmission {
   is_pinned: boolean
 }
 
+type SubmissionTab = "cases" | "matches" | "rentals" | "confessions" | "contact"
+
+type SelectedSubmission = {
+  tab: SubmissionTab
+  record: CaseSubmission | MatchSubmission | RentalSubmission | ConfessionSubmission | ContactSubmission
+}
+
 export default function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState("")
@@ -66,12 +81,15 @@ export default function AdminPanel() {
   const [loginLoading, setLoginLoading] = useState(false)
   const [error, setError] = useState("")
   
-  const [activeTab, setActiveTab] = useState<"cases" | "matches" | "rentals" | "confessions" | "contact">("cases")
+  const [activeTab, setActiveTab] = useState<SubmissionTab>("cases")
   const [cases, setCases] = useState<CaseSubmission[]>([])
   const [matches, setMatches] = useState<MatchSubmission[]>([])
   const [rentals, setRentals] = useState<RentalSubmission[]>([])
   const [confessions, setConfessions] = useState<ConfessionSubmission[]>([])
   const [contacts, setContacts] = useState<ContactSubmission[]>([])
+  const [selectedSubmission, setSelectedSubmission] = useState<SelectedSubmission | null>(null)
+  const [caseFindingDraft, setCaseFindingDraft] = useState("")
+  const [savingFinding, setSavingFinding] = useState(false)
   
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -195,6 +213,53 @@ export default function AdminPanel() {
     }
   }
 
+  const openSubmissionDetails = (
+    tab: SubmissionTab,
+    record: SelectedSubmission["record"],
+  ) => {
+    setSelectedSubmission({ tab, record })
+    setCaseFindingDraft(tab === "cases" ? (record as CaseSubmission).admin_finding || "" : "")
+  }
+
+  const closeSubmissionDetails = () => {
+    setSelectedSubmission(null)
+    setCaseFindingDraft("")
+  }
+
+  const saveCaseFinding = async () => {
+    if (!selectedSubmission || selectedSubmission.tab !== "cases") return
+
+    setSavingFinding(true)
+    try {
+      const { error } = await supabase
+        .from("cases")
+        .update({ admin_finding: caseFindingDraft })
+        .eq("id", selectedSubmission.record.id)
+
+      if (error) throw error
+
+      setCases((current) =>
+        current.map((caseRecord) =>
+          caseRecord.id === selectedSubmission.record.id
+            ? { ...caseRecord, admin_finding: caseFindingDraft }
+            : caseRecord,
+        ),
+      )
+      setSelectedSubmission((current) =>
+        current && current.tab === "cases"
+          ? {
+              ...current,
+              record: { ...current.record, admin_finding: caseFindingDraft } as CaseSubmission,
+            }
+          : current,
+      )
+    } catch (err) {
+      console.error("Error saving case finding:", err)
+    } finally {
+      setSavingFinding(false)
+    }
+  }
+
   const getFilteredData = () => {
     let data: any[] = []
     if (activeTab === "cases") data = cases
@@ -280,10 +345,11 @@ export default function AdminPanel() {
 
             <button
               type="submit"
+              disabled={loginLoading}
               className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-neon-pink text-background font-semibold rounded-lg transition-all duration-300 hover:scale-[1.02]"
             >
               <Lock className="w-5 h-5" />
-              Access Panel
+              {loginLoading ? "Checking..." : "Access Panel"}
             </button>
           </form>
 
@@ -473,6 +539,15 @@ export default function AdminPanel() {
                         exit={{ opacity: 0 }}
                         className="border-b border-border/30 hover:bg-white/5 transition-colors"
                       >
+                        {(() => {
+                          const caseRecord = record as CaseSubmission
+                          const matchRecord = record as MatchSubmission
+                          const rentalRecord = record as RentalSubmission
+                          const confessionRecord = record as ConfessionSubmission
+                          const contactRecord = record as ContactSubmission
+
+                          return (
+                            <>
                         <td className="py-4 px-4 whitespace-nowrap">
                           <div className="text-sm text-foreground">
                             {new Date(record.created_at).toLocaleDateString()}
@@ -490,54 +565,64 @@ export default function AdminPanel() {
                         )}
 
                         <td className="py-4 px-4">
-                          {activeTab === "cases" && (
-                            <div>
-                              <div className="text-sm font-bold text-foreground">{record.subject}</div>
-                              <div className="text-xs text-muted-foreground whitespace-normal break-words max-w-none">{record.description}</div>
-                              <div className="flex gap-2 mt-1">
-                                <span className="px-1.5 py-0.5 bg-neon-pink/10 text-neon-pink text-[10px] rounded uppercase">{record.case_type}</span>
-                                <span className={`px-1.5 py-0.5 text-[10px] rounded uppercase ${record.priority === 'urgent' ? 'bg-red-500/20 text-red-400' : 'bg-neon-blue/20 text-neon-blue'}`}>{record.priority}</span>
+                          <button
+                            type="button"
+                            onClick={() => openSubmissionDetails(activeTab, record)}
+                            className="w-full text-left rounded-xl transition-colors hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-neon-pink/40"
+                          >
+                            {activeTab === "cases" && (
+                              <div>
+                                <div className="text-sm font-bold text-foreground">{caseRecord.subject}</div>
+                                <div className="text-xs text-muted-foreground whitespace-normal break-words max-w-none">{caseRecord.description}</div>
+                                <div className="flex gap-2 mt-1">
+                                  <span className="px-1.5 py-0.5 bg-neon-pink/10 text-neon-pink text-[10px] rounded uppercase">{caseRecord.case_type}</span>
+                                  <span className={`px-1.5 py-0.5 text-[10px] rounded uppercase ${caseRecord.priority === 'urgent' ? 'bg-red-500/20 text-red-400' : 'bg-neon-blue/20 text-neon-blue'}`}>{caseRecord.priority}</span>
+                                </div>
                               </div>
-                            </div>
-                          )}
-                          {activeTab === "matches" && (
-                            <div>
-                              <div className="text-sm font-bold text-foreground">{record.age}y • {record.gender} seeking {record.seeking_gender}</div>
-                              <div className="text-xs text-muted-foreground whitespace-normal break-words max-w-none">{record.about_you}</div>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {record.traits?.slice(0, 3).map((t: string) => (
-                                  <span key={t} className="px-1.5 py-0.5 bg-neon-blue/10 text-neon-blue text-[10px] rounded">{t}</span>
-                                ))}
+                            )}
+                            {activeTab === "matches" && (
+                              <div>
+                                <div className="text-sm font-bold text-foreground">{matchRecord.age}y • {matchRecord.gender} seeking {matchRecord.seeking_gender}</div>
+                                <div className="text-xs text-muted-foreground whitespace-normal break-words max-w-none">{matchRecord.about_you}</div>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {matchRecord.traits?.slice(0, 3).map((t: string) => (
+                                    <span key={t} className="px-1.5 py-0.5 bg-neon-blue/10 text-neon-blue text-[10px] rounded">{t}</span>
+                                  ))}
+                                </div>
                               </div>
-                            </div>
-                          )}
-                          {activeTab === "rentals" && (
-                            <div>
-                              <div className="text-sm font-bold text-foreground">{record.duration} Duration</div>
-                              <div className="text-xs text-muted-foreground whitespace-normal break-words max-w-none">Notes: {record.additional_notes || "None"}</div>
-                              <div className="text-xs text-muted-foreground mt-1">Props: {record.prop_ids?.length || 0} items</div>
-                            </div>
-                          )}
-                          {activeTab === "contact" && (
-                            <div>
-                              <div className="text-sm font-bold text-foreground">{record.subject}</div>
-                              <div className="text-xs text-muted-foreground whitespace-normal break-words max-w-none">{record.message}</div>
-                              <div className="flex gap-2 mt-1">
-                                <span className="px-1.5 py-0.5 bg-neon-blue/10 text-neon-blue text-[10px] rounded uppercase">{record.inquiry_type}</span>
-                                {record.is_urgent && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded uppercase font-bold">URGENT</span>}
+                            )}
+                            {activeTab === "rentals" && (
+                              <div>
+                                <div className="text-sm font-bold text-foreground">{rentalRecord.duration} Duration</div>
+                                <div className="text-xs text-muted-foreground whitespace-normal break-words max-w-none">Notes: {rentalRecord.additional_notes || "None"}</div>
+                                <div className="text-xs text-muted-foreground mt-1">Props: {rentalRecord.prop_ids?.length || 0} items</div>
                               </div>
-                            </div>
-                          )}
-                          {activeTab === "confessions" && (
-                            <div className="max-w-none">
-                              <div className="text-sm text-foreground whitespace-normal break-words">{record.content}</div>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[10px] text-purple-400 font-mono uppercase">{record.mood}</span>
-                                <span className="text-[10px] text-muted-foreground">• {record.hearts} Hearts</span>
-                                {record.mnf_ign && <span className="text-[10px] text-neon-pink font-mono">• IGN: {record.mnf_ign}</span>}
+                            )}
+                            {activeTab === "contact" && (
+                              <div>
+                                <div className="text-sm font-bold text-foreground">{contactRecord.subject}</div>
+                                <div className="text-xs text-muted-foreground whitespace-normal break-words max-w-none">{contactRecord.message}</div>
+                                <div className="flex gap-2 mt-1">
+                                  <span className="px-1.5 py-0.5 bg-neon-blue/10 text-neon-blue text-[10px] rounded uppercase">{contactRecord.inquiry_type}</span>
+                                  {contactRecord.is_urgent && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded uppercase font-bold">URGENT</span>}
+                                </div>
                               </div>
+                            )}
+                            {activeTab === "confessions" && (
+                              <div className="max-w-none">
+                                <div className="text-sm text-foreground whitespace-normal break-words">{confessionRecord.content}</div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-[10px] text-purple-400 font-mono uppercase">{confessionRecord.mood}</span>
+                                  <span className="text-[10px] text-muted-foreground">• {confessionRecord.hearts} Hearts</span>
+                                  {confessionRecord.mnf_ign && <span className="text-[10px] text-neon-pink font-mono">• IGN: {confessionRecord.mnf_ign}</span>}
+                                </div>
+                              </div>
+                            )}
+                            <div className="mt-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 flex items-center gap-1">
+                              <Eye className="w-3 h-3" />
+                              View details
                             </div>
-                          )}
+                          </button>
                         </td>
 
                         <td className="py-4 px-4">
@@ -590,6 +675,9 @@ export default function AdminPanel() {
                             </button>
                           </div>
                         </td>
+                            </>
+                          )
+                        })()}
                       </motion.tr>
                     ))}
                   </AnimatePresence>
@@ -606,6 +694,231 @@ export default function AdminPanel() {
           )}
         </div>
       </div>
+
+      <Dialog open={Boolean(selectedSubmission)} onOpenChange={(open) => !open && closeSubmissionDetails()}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+          {selectedSubmission && (
+            <>
+              {(() => {
+                const submission = selectedSubmission.record
+                const caseRecord = submission as CaseSubmission
+                const matchRecord = submission as MatchSubmission
+                const rentalRecord = submission as RentalSubmission
+                const confessionRecord = submission as ConfessionSubmission
+                const contactRecord = submission as ContactSubmission
+
+                return (
+                  <>
+              <DialogHeader>
+                <DialogTitle className="text-foreground" style={{ fontFamily: "var(--font-orbitron)" }}>
+                  {selectedSubmission.tab === "cases"
+                    ? "Case Details"
+                    : selectedSubmission.tab === "matches"
+                      ? "Matchmaking Details"
+                      : selectedSubmission.tab === "rentals"
+                        ? "Prop Rental Details"
+                        : selectedSubmission.tab === "contact"
+                          ? "Contact Message Details"
+                          : "Confession Details"}
+                </DialogTitle>
+                <DialogDescription>
+                  Full submission data from Supabase. Case findings are stored on the case row so they stay linked to the same record.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="overflow-y-auto pr-2 space-y-6">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="glass rounded-xl p-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Reference</p>
+                    <p className="text-sm text-foreground font-mono break-all">{selectedSubmission.record.id}</p>
+                  </div>
+                  <div className="glass rounded-xl p-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Created</p>
+                    <p className="text-sm text-foreground">{new Date(selectedSubmission.record.created_at).toLocaleString()}</p>
+                  </div>
+                </div>
+
+                {selectedSubmission.tab === "cases" && (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="glass rounded-xl p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Client</p>
+                        <p className="text-sm text-foreground">{caseRecord.name}</p>
+                        <p className="text-xs text-neon-pink font-mono mt-1">IGN: {caseRecord.mnf_ign || "-"}</p>
+                      </div>
+                      <div className="glass rounded-xl p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Case Meta</p>
+                        <p className="text-sm text-foreground">{caseRecord.case_type}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Priority: {caseRecord.priority}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Confidential: {caseRecord.is_confidential ? "Yes" : "No"}</p>
+                      </div>
+                    </div>
+
+                    <div className="glass rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">Subject</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap break-words">{caseRecord.subject}</p>
+                    </div>
+
+                    <div className="glass rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">Description</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap break-words">{caseRecord.description}</p>
+                    </div>
+
+                    <div className="glass rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">Evidence</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap break-words">{caseRecord.evidence || "No evidence provided."}</p>
+                    </div>
+
+                    <div className="glass rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">Detective Finding</p>
+                      <textarea
+                        value={caseFindingDraft}
+                        onChange={(e) => setCaseFindingDraft(e.target.value)}
+                        rows={6}
+                        className="w-full rounded-xl border border-border bg-background/40 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-neon-pink/40"
+                        placeholder="Write your findings, conclusions, next steps, or internal notes here..."
+                      />
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        This is saved directly on the case record, so the finding stays linked to the case.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedSubmission.tab === "matches" && (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      <div className="glass rounded-xl p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Identity</p>
+                        <p className="text-sm text-foreground">{matchRecord.name}</p>
+                        <p className="text-xs text-neon-pink font-mono mt-1">IGN: {matchRecord.mnf_ign || "-"}</p>
+                      </div>
+                      <div className="glass rounded-xl p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Profile</p>
+                        <p className="text-sm text-foreground">{matchRecord.age} years old</p>
+                        <p className="text-xs text-muted-foreground mt-1">{matchRecord.gender} seeking {matchRecord.seeking_gender}</p>
+                      </div>
+                      <div className="glass rounded-xl p-4 sm:col-span-2 lg:col-span-1">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Traits</p>
+                        <div className="flex flex-wrap gap-2">
+                          {matchRecord.traits?.map((trait) => (
+                            <span key={trait} className="px-2 py-1 rounded-full bg-neon-blue/10 text-neon-blue text-xs">
+                              {trait}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="glass rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">About</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap break-words">{matchRecord.about_you}</p>
+                    </div>
+
+                    <div className="glass rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">Looking For</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap break-words">{matchRecord.looking_for}</p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedSubmission.tab === "rentals" && (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="glass rounded-xl p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Client</p>
+                        <p className="text-sm text-foreground">{rentalRecord.name}</p>
+                        <p className="text-xs text-neon-pink font-mono mt-1">IGN: {rentalRecord.mnf_ign || "-"}</p>
+                      </div>
+                      <div className="glass rounded-xl p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Duration</p>
+                        <p className="text-sm text-foreground">{rentalRecord.duration}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Props: {rentalRecord.prop_ids?.join(", ") || "None"}</p>
+                      </div>
+                    </div>
+
+                    <div className="glass rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">Additional Notes</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap break-words">{rentalRecord.additional_notes || "None"}</p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedSubmission.tab === "contact" && (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="glass rounded-xl p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Client</p>
+                        <p className="text-sm text-foreground">{contactRecord.name}</p>
+                        <p className="text-xs text-neon-pink font-mono mt-1">IGN: {contactRecord.mnf_ign || "-"}</p>
+                      </div>
+                      <div className="glass rounded-xl p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Inquiry</p>
+                        <p className="text-sm text-foreground">{contactRecord.inquiry_type}</p>
+                        <p className="text-xs text-muted-foreground mt-1">Urgent: {contactRecord.is_urgent ? "Yes" : "No"}</p>
+                      </div>
+                    </div>
+
+                    <div className="glass rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">Subject</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap break-words">{contactRecord.subject}</p>
+                    </div>
+
+                    <div className="glass rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">Message</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap break-words">{contactRecord.message}</p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedSubmission.tab === "confessions" && (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="glass rounded-xl p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Mood</p>
+                        <p className="text-sm text-foreground">{confessionRecord.mood}</p>
+                      </div>
+                      <div className="glass rounded-xl p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Status</p>
+                        <p className="text-sm text-foreground">{confessionRecord.is_pinned ? "Pinned" : "Unpinned"}</p>
+                      </div>
+                    </div>
+
+                    <div className="glass rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">Confession</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap break-words">{confessionRecord.content}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="pt-2">
+                {selectedSubmission.tab === "cases" ? (
+                  <button
+                    type="button"
+                    onClick={saveCaseFinding}
+                    disabled={savingFinding}
+                    className="px-4 py-2 rounded-lg bg-neon-pink text-background font-semibold transition-all disabled:opacity-60"
+                  >
+                    {savingFinding ? "Saving..." : "Save Finding"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={closeSubmissionDetails}
+                    className="px-4 py-2 rounded-lg glass text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Close
+                  </button>
+                )}
+              </DialogFooter>
+                  </>
+                )
+              })()}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }

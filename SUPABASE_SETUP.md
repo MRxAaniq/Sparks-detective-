@@ -28,6 +28,7 @@ create table cases (
   subject text,
   description text,
   evidence text,
+  admin_finding text,
   is_confidential boolean default true,
   status text default 'pending',
   created_at timestamp with time zone default now()
@@ -142,3 +143,4 @@ If you want to keep the admin panel limited to your browser session, you can sti
 1.  Access the hidden route: `/sparks-admin-panel-7x9k`
 2.  Login with the password: `sparks2024admin` (You can change this later in the Supabase `settings` table).
 3.  Use the **Star** icon in the Confessions tab to pin the "Confession of the Month".
+4.  Open any submission row to view the full record. In the Cases popup, the detective's notes are saved to the same case row through the `admin_finding` column, so the finding stays linked to that specific case.

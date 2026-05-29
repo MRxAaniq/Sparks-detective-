@@ -46,13 +46,13 @@ const agents = [
     name: "Corinne",
     role: "God Tier Slut",
     specialty: "Will Make you Forget bout ur lover",
-    image: "/images/corine.jpeg",
+    image: "/images/corr.webp",
     stats: {
       stealth: 85,
       tech: 70,
       combat: 80,
     },
-    quote: "SSS tier Slut.",
+    quote: "Will surely put a deep enchanting mark on you.",
   },
    {
     name: "Onee-Chan",
@@ -68,15 +68,15 @@ const agents = [
   },
   {
     name: "Markon",
-    role: "Black-Bottom",
-    specialty: "Kinda Gay 💅",
-    image: "/images/mark.jpg",
+    role: "Support Specialist",
+    specialty: "Undercover Agents",
+    image: "/images/mar.webp",
     stats: {
       stealth: 85,
       tech: 70,
       combat: 80,
     },
-    quote: "Good Bottom T_T.",
+    quote: "Trust no one, suspect everyone.",
   }
 ]
 
