@@ -67,11 +67,19 @@ interface ConfessionSubmission extends BaseSubmission {
   is_pinned: boolean
 }
 
-type SubmissionTab = "cases" | "matches" | "rentals" | "confessions" | "contact"
+interface TestimonialSubmission extends BaseSubmission {
+  name?: string | null
+  content: string
+  rating: number
+  is_anonymous: boolean
+  is_hidden: boolean
+}
+
+type SubmissionTab = "cases" | "matches" | "rentals" | "confessions" | "contact" | "testimonials"
 
 type SelectedSubmission = {
   tab: SubmissionTab
-  record: CaseSubmission | MatchSubmission | RentalSubmission | ConfessionSubmission | ContactSubmission
+  record: CaseSubmission | MatchSubmission | RentalSubmission | ConfessionSubmission | ContactSubmission | TestimonialSubmission
 }
 
 export default function AdminPanel() {
@@ -87,6 +95,7 @@ export default function AdminPanel() {
   const [rentals, setRentals] = useState<RentalSubmission[]>([])
   const [confessions, setConfessions] = useState<ConfessionSubmission[]>([])
   const [contacts, setContacts] = useState<ContactSubmission[]>([])
+  const [testimonials, setTestimonials] = useState<TestimonialSubmission[]>([])
   const [selectedSubmission, setSelectedSubmission] = useState<SelectedSubmission | null>(null)
   const [caseFindingDraft, setCaseFindingDraft] = useState("")
   const [savingFinding, setSavingFinding] = useState(false)
@@ -113,15 +122,16 @@ export default function AdminPanel() {
     setLoading(true)
     setDataError("")
     try {
-      const [cRes, mRes, rRes, cfRes, ctRes] = await Promise.all([
+      const [cRes, mRes, rRes, cfRes, ctRes, tRes] = await Promise.all([
         supabase.from('cases').select('*').order('created_at', { ascending: false }),
         supabase.from('matchmaking').select('*').order('created_at', { ascending: false }),
         supabase.from('prop_rentals').select('*').order('created_at', { ascending: false }),
         supabase.from('confessions').select('*').order('created_at', { ascending: false }),
-        supabase.from('contact_messages').select('*').order('created_at', { ascending: false })
+        supabase.from('contact_messages').select('*').order('created_at', { ascending: false }),
+        supabase.from('testimonials').select('*').order('created_at', { ascending: false })
       ])
 
-      const errors = [cRes.error, mRes.error, rRes.error, cfRes.error, ctRes.error].filter(
+      const errors = [cRes.error, mRes.error, rRes.error, cfRes.error, ctRes.error, tRes.error].filter(
         (error): error is NonNullable<typeof error> => Boolean(error)
       )
       if (errors.length > 0) {
@@ -134,6 +144,7 @@ export default function AdminPanel() {
       setRentals(rRes.data || [])
       setConfessions(cfRes.data || [])
       setContacts(ctRes.data || [])
+      setTestimonials(tRes.data || [])
     } catch (err) {
       console.error("Error fetching admin data:", err)
       setDataError(err instanceof Error ? err.message : "Failed to load admin data.")
@@ -202,6 +213,20 @@ export default function AdminPanel() {
     }
   }
 
+  const toggleTestimonialVisibility = async (id: string, currentlyHidden: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('testimonials')
+        .update({ is_hidden: !currentlyHidden })
+        .eq('id', id)
+
+      if (error) throw error
+      fetchAllData()
+    } catch (err) {
+      console.error("Error toggling testimonial visibility:", err)
+    }
+  }
+
   const deleteRecord = async (table: string, id: string) => {
     if (!confirm("Are you sure you want to delete this record?")) return
     try {
@@ -267,6 +292,7 @@ export default function AdminPanel() {
     else if (activeTab === "rentals") data = rentals
     else if (activeTab === "confessions") data = confessions
     else if (activeTab === "contact") data = contacts
+    else if (activeTab === "testimonials") data = testimonials
 
     return data.filter(item => {
       const matchesSearch = 
@@ -274,9 +300,10 @@ export default function AdminPanel() {
         (item.mnf_ign?.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (item.id.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (item.content?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (item.subject?.toLowerCase().includes(searchQuery.toLowerCase()))
+        (item.subject?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.rating?.toString().includes(searchQuery.toLowerCase()))
       
-      const matchesStatus = statusFilter === "all" || item.status === statusFilter
+      const matchesStatus = activeTab === "testimonials" || statusFilter === "all" || item.status === statusFilter
       return matchesSearch && matchesStatus
     })
   }
@@ -285,6 +312,7 @@ export default function AdminPanel() {
     { label: "Total Cases", value: cases.length, icon: FileText, color: "pink" },
     { label: "Matches", value: matches.length, icon: Heart, color: "blue" },
     { label: "Confessions", value: confessions.length, icon: MessageSquare, color: "purple" },
+    { label: "Testimonials", value: testimonials.length, icon: Star, color: "yellow" },
     { label: "Pending", value: [...cases, ...matches, ...rentals, ...contacts].filter(i => i.status === "pending").length, icon: Clock, color: "yellow" },
   ]
 
@@ -406,7 +434,7 @@ export default function AdminPanel() {
         )}
 
         {/* Stats Grid */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           {stats.map((stat, i) => {
             const Icon = stat.icon
             const colorClass = stat.color === "pink" ? "text-neon-pink" : stat.color === "blue" ? "text-neon-blue" : stat.color === "purple" ? "text-purple-400" : "text-yellow-400"
@@ -444,6 +472,7 @@ export default function AdminPanel() {
             { id: "rentals", label: "Prop Rentals", icon: Package },
             { id: "contact", label: "Contact", icon: Mail },
             { id: "confessions", label: "Confessions", icon: MessageSquare },
+            { id: "testimonials", label: "Testimonials", icon: Star },
           ].map((tab) => {
             const Icon = tab.icon
             return (
@@ -485,7 +514,7 @@ export default function AdminPanel() {
               </div>
               
               {/* Filter */}
-              {activeTab !== "confessions" && (
+              {activeTab !== "confessions" && activeTab !== "testimonials" && (
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -512,17 +541,20 @@ export default function AdminPanel() {
                 <thead>
                   <tr className="border-b border-border/50">
                     <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Date</th>
-                    {activeTab !== "confessions" && (
+                    {activeTab !== "confessions" && activeTab !== "testimonials" && (
                       <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Client Info</th>
                     )}
                     <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">
                       {activeTab === "cases" ? "Case Details" : 
                        activeTab === "matches" ? "Profile" : 
                        activeTab === "rentals" ? "Rental Details" : 
-                       activeTab === "contact" ? "Message Info" : "Confession"}
+                       activeTab === "contact" ? "Message Info" : 
+                       activeTab === "testimonials" ? "Testimonial" : "Confession"}
                     </th>
-                    {activeTab !== "confessions" ? (
+                    {activeTab !== "confessions" && activeTab !== "testimonials" ? (
                       <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Status</th>
+                    ) : activeTab === "testimonials" ? (
+                      <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Visibility</th>
                     ) : (
                       <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Pinned</th>
                     )}
@@ -545,6 +577,7 @@ export default function AdminPanel() {
                           const rentalRecord = record as RentalSubmission
                           const confessionRecord = record as ConfessionSubmission
                           const contactRecord = record as ContactSubmission
+                          const testimonialRecord = record as TestimonialSubmission
 
                           return (
                             <>
@@ -557,10 +590,27 @@ export default function AdminPanel() {
                           </div>
                         </td>
                         
-                        {activeTab !== "confessions" && (
+                        {activeTab !== "confessions" && activeTab !== "testimonials" && (
                           <td className="py-4 px-4">
                             <div className="text-sm font-bold text-foreground">{record.name}</div>
                             <div className="text-xs text-neon-pink font-mono mt-1">IGN: {record.mnf_ign}</div>
+                          </td>
+                        )}
+
+                        {activeTab === "testimonials" && (
+                          <td className="py-4 px-4">
+                            <div className="text-sm font-bold text-foreground">
+                              {testimonialRecord.is_anonymous ? "Anonymous client" : testimonialRecord.name || "Verified client"}
+                            </div>
+                            <div className="mt-1 flex items-center gap-1 text-xs text-yellow-300">
+                              {Array.from({ length: 5 }).map((_, index) => (
+                                <Star
+                                  key={index}
+                                  className={`w-3.5 h-3.5 ${index < testimonialRecord.rating ? "fill-current" : "text-white/20"}`}
+                                />
+                              ))}
+                              <span className="ml-1 text-muted-foreground">{testimonialRecord.rating}/5</span>
+                            </div>
                           </td>
                         )}
 
@@ -618,6 +668,30 @@ export default function AdminPanel() {
                                 </div>
                               </div>
                             )}
+                            {activeTab === "testimonials" && (
+                              <div className="max-w-none">
+                                <div className="flex items-center gap-1 mb-2">
+                                  {Array.from({ length: 5 }).map((_, index) => (
+                                    <Star
+                                      key={index}
+                                      className={`w-4 h-4 ${index < testimonialRecord.rating ? "fill-yellow-400 text-yellow-400" : "text-white/20"}`}
+                                    />
+                                  ))}
+                                </div>
+                                <div className="text-sm text-foreground whitespace-normal break-words">{testimonialRecord.content}</div>
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                  <span className="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-300 text-[10px] rounded uppercase">{testimonialRecord.rating}/5 Stars</span>
+                                  {testimonialRecord.is_anonymous ? (
+                                    <span className="px-1.5 py-0.5 bg-white/10 text-muted-foreground text-[10px] rounded uppercase">Anonymous</span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 bg-neon-pink/10 text-neon-pink text-[10px] rounded uppercase">{testimonialRecord.name}</span>
+                                  )}
+                                  <span className="px-1.5 py-0.5 bg-white/10 text-muted-foreground text-[10px] rounded uppercase">
+                                    {testimonialRecord.is_hidden ? "Hidden" : "Public"}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                             <div className="mt-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 flex items-center gap-1">
                               <Eye className="w-3 h-3" />
                               View details
@@ -626,7 +700,7 @@ export default function AdminPanel() {
                         </td>
 
                         <td className="py-4 px-4">
-                          {activeTab !== "confessions" ? (
+                          {activeTab !== "confessions" && activeTab !== "testimonials" ? (
                             <select
                               value={record.status}
                               onChange={(e) => updateStatus(
@@ -645,6 +719,15 @@ export default function AdminPanel() {
                               <option value="reviewed" className="bg-background">REVIEWED</option>
                               <option value="resolved" className="bg-background">RESOLVED</option>
                             </select>
+                          ) : activeTab === "testimonials" ? (
+                            <button
+                              onClick={() => toggleTestimonialVisibility(record.id, testimonialRecord.is_hidden)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold border-0 outline-none cursor-pointer transition-all ${
+                                testimonialRecord.is_hidden ? "bg-white/10 text-muted-foreground hover:text-foreground" : "bg-yellow-500/20 text-yellow-300"
+                              }`}
+                            >
+                              {testimonialRecord.is_hidden ? "HIDDEN" : "PUBLIC"}
+                            </button>
                           ) : (
                             <button
                               onClick={() => togglePin(record.id, record.is_pinned)}
@@ -666,7 +749,8 @@ export default function AdminPanel() {
                                 activeTab === 'cases' ? 'cases' : 
                                 activeTab === 'matches' ? 'matchmaking' : 
                                 activeTab === 'rentals' ? 'prop_rentals' : 
-                                activeTab === 'contact' ? 'contact_messages' : 'confessions', 
+                                activeTab === 'contact' ? 'contact_messages' : 
+                                activeTab === 'testimonials' ? 'testimonials' : 'confessions', 
                                 record.id
                               )}
                               className="p-2 hover:bg-red-500/20 rounded-lg transition-colors text-muted-foreground hover:text-red-400"
@@ -706,6 +790,7 @@ export default function AdminPanel() {
                 const rentalRecord = submission as RentalSubmission
                 const confessionRecord = submission as ConfessionSubmission
                 const contactRecord = submission as ContactSubmission
+                const testimonialRecord = submission as TestimonialSubmission
 
                 return (
                   <>
@@ -719,6 +804,8 @@ export default function AdminPanel() {
                         ? "Prop Rental Details"
                         : selectedSubmission.tab === "contact"
                           ? "Contact Message Details"
+                          : selectedSubmission.tab === "testimonials"
+                            ? "Testimonial Details"
                           : "Confession Details"}
                 </DialogTitle>
                 <DialogDescription>
@@ -887,6 +974,35 @@ export default function AdminPanel() {
                     <div className="glass rounded-xl p-4">
                       <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">Confession</p>
                       <p className="text-sm text-foreground whitespace-pre-wrap break-words">{confessionRecord.content}</p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedSubmission.tab === "testimonials" && (
+                  <div className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="glass rounded-xl p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Author</p>
+                        <p className="text-sm text-foreground">
+                          {testimonialRecord.is_anonymous ? "Anonymous client" : testimonialRecord.name || "Verified client"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">Anonymous: {testimonialRecord.is_anonymous ? "Yes" : "No"}</p>
+                      </div>
+                      <div className="glass rounded-xl p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-1">Rating</p>
+                        <div className="flex items-center gap-1 mb-1">
+                          {Array.from({ length: 5 }).map((_, index) => (
+                            <Star key={index} className={`w-4 h-4 ${index < testimonialRecord.rating ? "fill-yellow-400 text-yellow-400" : "text-white/20"}`} />
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{testimonialRecord.rating}/5 stars</p>
+                        <p className="text-xs text-muted-foreground mt-1">Visibility: {testimonialRecord.is_hidden ? "Hidden" : "Public"}</p>
+                      </div>
+                    </div>
+
+                    <div className="glass rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">Testimonial</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap break-words">{testimonialRecord.content}</p>
                     </div>
                   </div>
                 )}

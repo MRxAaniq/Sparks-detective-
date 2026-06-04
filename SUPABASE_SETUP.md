@@ -89,7 +89,18 @@ create table confessions (
   created_at timestamp with time zone default now()
 );
 
--- 5. Create Settings Table (for Admin Password)
+-- 6. Create Testimonials Table
+create table testimonials (
+  id uuid default gen_random_uuid() primary key,
+  name text,
+  content text not null,
+  rating integer not null check (rating between 1 and 5),
+  is_anonymous boolean default false,
+  is_hidden boolean default false,
+  created_at timestamp with time zone default now()
+);
+
+-- 7. Create Settings Table (for Admin Password)
 create table settings (
   key text primary key,
   value text
@@ -120,6 +131,9 @@ By default, these tables are protected. To allow users to submit forms, you shou
 *   **For `confessions`:**
     *   Policy: `Enable read for everyone` (Public)
     *   Policy: `Enable insert for everyone` (Public)
+*   **For `testimonials`:**
+  *   Policy: `Enable read for everyone where is_hidden = false` (Public, required for the testimonials page)
+  *   Policy: `Enable insert for everyone` (Public)
 *   **For `settings`:**
     *   Policy: `Enable read for everyone` (Public - needed for login check)
 
@@ -134,6 +148,7 @@ grant select, insert, update, delete on table public.matchmaking to anon, authen
 grant select, insert, update, delete on table public.prop_rentals to anon, authenticated;
 grant select, insert, update, delete on table public.contact_messages to anon, authenticated;
 grant select, insert, update, delete on table public.confessions to anon, authenticated;
+grant select, insert, update, delete on table public.testimonials to anon, authenticated;
 grant select on table public.settings to anon, authenticated;
 ```
 
@@ -144,3 +159,4 @@ If you want to keep the admin panel limited to your browser session, you can sti
 2.  Login with the password: `sparks2024admin` (You can change this later in the Supabase `settings` table).
 3.  Use the **Star** icon in the Confessions tab to pin the "Confession of the Month".
 4.  Open any submission row to view the full record. In the Cases popup, the detective's notes are saved to the same case row through the `admin_finding` column, so the finding stays linked to that specific case.
+5.  Use the new Testimonials page for live public reviews, then hide or delete reviews from the admin panel when needed.
