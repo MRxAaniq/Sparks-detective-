@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Orbitron, Rajdhani } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import ChatWidget from '@/components/chat-widget'
 import './globals.css'
 
 const orbitron = Orbitron({ 
@@ -48,6 +49,7 @@ export default function RootLayout({
     <html lang="en" className={`${orbitron.variable} ${rajdhani.variable} bg-background`}>
       <body className="font-sans antialiased bg-background text-foreground">
         {children}
+        <ChatWidget />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

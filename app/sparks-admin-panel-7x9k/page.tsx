@@ -4,9 +4,10 @@ import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   Shield, Lock, Eye, EyeOff, FileText, Heart, MessageSquare,
-  Package, Mail, Clock, Search, Trash2, Star
+  Package, Mail, Clock, Search, Trash2, Star, MessagesSquare
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import AdminChatPanel from "@/components/chat/admin-chat-panel"
 import {
   Dialog,
   DialogContent,
@@ -75,7 +76,7 @@ interface TestimonialSubmission extends BaseSubmission {
   is_hidden: boolean
 }
 
-type SubmissionTab = "cases" | "matches" | "rentals" | "confessions" | "contact" | "testimonials"
+type SubmissionTab = "cases" | "matches" | "rentals" | "confessions" | "contact" | "testimonials" | "livechat"
 
 type SelectedSubmission = {
   tab: SubmissionTab
@@ -473,6 +474,7 @@ export default function AdminPanel() {
             { id: "contact", label: "Contact", icon: Mail },
             { id: "confessions", label: "Confessions", icon: MessageSquare },
             { id: "testimonials", label: "Testimonials", icon: Star },
+            { id: "livechat", label: "Live Chat", icon: MessagesSquare },
           ].map((tab) => {
             const Icon = tab.icon
             return (
@@ -494,6 +496,9 @@ export default function AdminPanel() {
         </div>
 
         {/* Submissions Content */}
+        {activeTab === "livechat" ? (
+          <AdminChatPanel />
+        ) : (
         <div className="glass-card rounded-xl p-6">
           <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-foreground uppercase tracking-widest" style={{ fontFamily: "var(--font-orbitron)" }}>
@@ -777,6 +782,7 @@ export default function AdminPanel() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       <Dialog open={Boolean(selectedSubmission)} onOpenChange={(open) => !open && closeSubmissionDetails()}>
