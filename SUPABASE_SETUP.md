@@ -110,6 +110,35 @@ create table settings (
 insert into settings (key, value) 
 values ('admin_password', 'sparks2024admin');
 
+-- 8. Create Live Chat Sessions Table
+create table chat_sessions (
+  id uuid default gen_random_uuid() primary key,
+  session_key uuid not null unique default gen_random_uuid(),
+  chat_code text not null unique,
+  display_name text not null,
+  mnf_ign text not null,
+  status text default 'open' check (status in ('open', 'closed')),
+  last_message_at timestamp with time zone default now(),
+  last_message_preview text,
+  unread_by_admin boolean default false,
+  created_at timestamp with time zone default now()
+);
+
+-- 9. Create Live Chat Messages Table
+create table chat_messages (
+  id uuid default gen_random_uuid() primary key,
+  session_id uuid not null references chat_sessions(id) on delete cascade,
+  sender text not null check (sender in ('user', 'admin')),
+  body text,
+  attachment_url text,
+  attachment_type text check (attachment_type is null or attachment_type = 'image'),
+  created_at timestamp with time zone default now()
+);
+
+create index chat_messages_session_created_idx on chat_messages (session_id, created_at desc);
+create index chat_sessions_last_message_idx on chat_sessions (last_message_at desc);
+create index chat_sessions_chat_code_idx on chat_sessions (chat_code);
+
 -- 6. Helper Function for Hearts (Optional but recommended)
 create or replace function increment_hearts(confession_id uuid)
 returns void as $$
@@ -136,6 +165,11 @@ By default, these tables are protected. To allow users to submit forms, you shou
   *   Policy: `Enable insert for everyone` (Public)
 *   **For `settings`:**
     *   Policy: `Enable read for everyone` (Public - needed for login check)
+*   **For `chat_sessions`, `chat_messages`:**
+    *   Policy: `Enable insert for everyone` (Public)
+    *   Policy: `Enable select for everyone` (Public)
+    *   Policy: `Enable update for everyone` (Public)
+    *   Policy: `Enable delete for everyone` (Public, admin panel only in practice)
 
 ### Important: add table grants too
 If you still get `permission denied for table ...`, you also need to grant PostgreSQL privileges to the `anon` role. Run this in the Supabase SQL editor after creating the tables:
@@ -150,11 +184,47 @@ grant select, insert, update, delete on table public.contact_messages to anon, a
 grant select, insert, update, delete on table public.confessions to anon, authenticated;
 grant select, insert, update, delete on table public.testimonials to anon, authenticated;
 grant select on table public.settings to anon, authenticated;
+grant select, insert, update, delete on table public.chat_sessions to anon, authenticated;
+grant select, insert, update, delete on table public.chat_messages to anon, authenticated;
 ```
 
 If you want to keep the admin panel limited to your browser session, you can still use these grants and rely on RLS policies to decide what each role can actually do.
 
-## 5. Admin Panel Usage
+## 5. Live Chat Storage Bucket
+
+In the Supabase dashboard, go to **Storage** and create a new public bucket:
+
+- Bucket name: `chat-attachments`
+- Public bucket: **Yes**
+
+Then run this SQL to allow uploads from the anon role:
+
+```sql
+insert into storage.buckets (id, name, public)
+values ('chat-attachments', 'chat-attachments', true)
+on conflict (id) do nothing;
+
+create policy "Public read chat attachments"
+on storage.objects for select
+using (bucket_id = 'chat-attachments');
+
+create policy "Anyone can upload chat attachments"
+on storage.objects for insert
+with check (bucket_id = 'chat-attachments');
+
+create policy "Anyone can delete chat attachments"
+on storage.objects for delete
+using (bucket_id = 'chat-attachments');
+```
+
+### Optional: clean up old chats (run manually to save DB space)
+
+```sql
+delete from chat_sessions
+where last_message_at < now() - interval '30 days';
+```
+
+## 6. Admin Panel Usage
 1.  Access the hidden route: `/sparks-admin-panel-7x9k`
 2.  Login with the password: `sparks2024admin` (You can change this later in the Supabase `settings` table).
 3.  Use the **Star** icon in the Confessions tab to pin the "Confession of the Month".
